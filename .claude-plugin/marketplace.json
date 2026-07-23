@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "kros-plugins",
+  "description": "Kros internal Claude Code plugins for building and packaging plugins for the KROS plugin store (the business app marketplace)",
+  "owner": {
+    "name": "Kros-sk",
+    "email": "dev@kros.sk"
+  },
+  "plugins": [
+    {
+      "name": "plugin-builder",
+      "description": "Create or package a plugin for the KROS plugin store — builds a valid manifest.json and an upload-ready .zip that passes the Framework's validation",
+      "source": "./plugins/plugin-builder",
+      "version": "1.0.0",
+      "category": "development",
+      "author": {
+        "name": "Kros-sk"
+      }
+    }
+  ]
+}

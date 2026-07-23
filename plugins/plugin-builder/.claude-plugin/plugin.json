@@ -1,0 +1,8 @@
+{
+  "name": "plugin-builder",
+  "description": "Create or package a plugin for the KROS plugin store (the business app marketplace) — building a manifest.json and/or an upload-ready .zip (manifest + icon + optional media) that passes the Framework's validation",
+  "version": "1.0.0",
+  "author": {
+    "name": "Kros-sk"
+  }
+}
