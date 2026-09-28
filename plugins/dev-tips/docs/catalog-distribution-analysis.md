@@ -1,246 +1,240 @@
-# Catalog distribution — analysis
+# Distribúcia katalógu — analýza
 
-Why the design in [catalog-distribution.md](catalog-distribution.md) looks the way it does: how the
-thing is meant to work, in what order it arrives, and which alternatives were rejected and on what
-grounds.
+Prečo dizajn v [catalog-distribution.md](catalog-distribution.md) vyzerá tak, ako vyzerá: ako to má
+fungovať, v akom poradí to má prichádzať a ktoré alternatívy boli zamietnuté a na akom základe.
 
-The design document says *what to build*. This one says *why*, and is the document to reread before
-overturning any of it.
+Design dokument hovorí *čo postaviť*. Tento hovorí *prečo* a je to dokument, ktorý si treba prečítať
+znova skôr, než sa čokoľvek z toho prehodí.
 
-## How it should work
+## Ako to má fungovať
 
-**Code ships with the plugin. Content does not.** The plugin version changes when hook logic changes,
-which is rare. Tips reach people without anyone running a command.
+**Kód sa distribuuje s pluginom. Obsah nie.** Verzia pluginu sa mení vtedy, keď sa mení logika hookov,
+čo je zriedka. Tipy sa k ľuďom dostanú bez toho, aby ktokoľvek niečo spúšťal.
 
-From the developer's side, one session looks like this. At session start the hook reads three things
-off the local disk — what is installed on the machine, what the current repository carries in
-`.dev-tips/`, and the cached remote catalog — merges them, and delivers at most one tip. Nothing waits
-on the network. During the session, the command ledger and skill usage are recorded as they are
-today. At the end of a turn, if the cached catalog is older than its TTL, a detached process refreshes
-it for the next session and the current turn is unaffected.
+Z pohľadu vývojára vyzerá jedna session takto. Pri štarte hook prečíta z lokálneho disku tri veci —
+čo má nainštalované na stroji, čo nesie aktuálne repo v `.dev-tips/` a nacachovaný vzdialený katalóg —
+zlúči ich a doručí najviac jeden tip. Na sieť sa nečaká. Počas session sa ďalej zaznamenáva ledger
+príkazov a použitie skillov tak ako doteraz. Na konci turnu, ak je cache staršia než jej TTL, odpojený
+proces ju obnoví pre nasledujúcu session a prebiehajúceho turnu sa to nijako nedotkne.
 
-From the author's side it looks like this. Someone adds a skill or a command to `Kros.AiDevTools` and
-writes a `tip.json` beside it in the same pull request; CI validates it against the tools that
-actually exist, and the pull request merges. There is nothing to publish — that file is what the
-machines read. Within a day it is on every machine. If the tip turns out to be wrong, the next
-commit corrects it, or `enabled: false` silences everything until it is sorted out.
+Z pohľadu autora to vyzerá takto. Niekto pridá skill alebo command do `Kros.AiDevTools` a v tom istom
+pull requeste k nemu napíše `tip.json`; CI ho zvaliduje voči nástrojom, ktoré naozaj existujú, a PR sa
+zmerguje. Niet čo publikovať — ten súbor **je** to, čo stroje čítajú. Do dňa je na každom stroji. Ak
+sa tip ukáže ako nesprávny, opraví ho ďalší commit, alebo `enabled: false` umlčí všetko, kým sa to
+nevyrieši.
 
-Which of the three sources a tip comes from is decided by one question: **does the developer already
-have the thing the tip is about?**
+Z ktorého z troch zdrojov tip pochádza, rozhoduje jedna otázka: **má už vývojár tú vec, o ktorej tip
+hovorí?**
 
-- If they have it, nothing needs to be published at all. The skill is on their disk, its description
-  says what it is for, and `usage.json` says whether they have ever invoked it. That yields *you have
-  this and have never used it*, which is the strongest form of the tip and needs no catalog entry.
-- If it belongs to the repository they are working in, it travels with that repository and arrives
-  with `git pull`.
-- Only a tool they do **not** have cannot be discovered, and only that case needs a published
-  catalog.
+- Ak ju má, netreba publikovať vôbec nič. Skill je na jeho disku, jeho `description` hovorí, načo je,
+  a `usage.json` hovorí, či ho niekedy spustil. Z toho vznikne *máš to a nikdy si to nepoužil*, čo je
+  najsilnejšia forma tipu a nepotrebuje žiadny záznam v katalógu.
+- Ak patrí repu, v ktorom práve pracuje, cestuje s tým repom a príde `git pull`-om.
+- Objaviť sa nedá len nástroj, ktorý **nemá** — a len ten prípad potrebuje publikovaný katalóg.
 
-## Why publishing has to change
+## Prečo sa publikovanie musí zmeniť
 
-Tip content is packaged inside the plugin, so publishing one tip means a version bump, a marketplace
-update, a plugin update and a restart — and three of those four steps belong to the developer, not to
-us. Somebody who never runs them reads a stale catalog indefinitely and neither side is told.
+Obsah tipov je zabalený v plugine, takže vydať jeden tip znamená bump verzie, update marketplacu,
+update pluginu a reštart — a tri zo štyroch krokov patria vývojárovi, nie nám. Kto ich nikdy nespustí,
+číta zastaraný katalóg donekonečna a ani jedna strana sa to nedozvie.
 
-The same coupling makes the plugin un-silenceable: a tip that turns out to be wrong keeps being shown
-until every person individually updates. For a plugin whose entire job is to announce things that
-have just appeared, both of these are backwards.
+Tá istá väzba robí plugin neumlčateľným: tip, ktorý sa ukáže ako nesprávny, sa zobrazuje ďalej, kým sa
+každý jeden človek individuálne neaktualizuje. Pri plugine, ktorého celou úlohou je oznamovať veci,
+ktoré práve pribudli, je oboje naopak.
 
-## The order it should arrive in
+## V akom poradí to má prichádzať
 
-| Stage | Work | What it unblocks | Depends on |
+| Etapa | Práca | Čo odomkne | Závisí od |
 |---|---|---|---|
-| 0 | Sane cooldowns in `catalog/config.json` | the plugin being tolerable at all | nothing |
-| 1 | Channel A — local discovery | most tips stop needing a catalog entry | nothing |
-| 2 | Channel B — `.dev-tips/` in product repositories | ADRs and conventions per repository | nothing |
-| 3 | Channel C — background fetch of the source, validation in CI | tips about tools the developer lacks | CI access to `Kros.AiDevTools` |
-| 4 | Hand-editing of `catalog/tips.json` stops | one source of truth | stages 1–3 |
+| 0 | Rozumné cooldowny v `catalog/config.json` | aby bol plugin vôbec znesiteľný | nič |
+| 1 | Kanál A — lokálna detekcia | väčšina tipov prestane potrebovať záznam v katalógu | nič |
+| 2 | Kanál B — `.dev-tips/` v produktových repách | ADR a konvencie per repo | nič |
+| 3 | Kanál C — CI, fetch na pozadí | tipy na nástroje, ktoré vývojár nemá | prístup k CI v `Kros.AiDevTools` |
+| 4 | Koniec ručného editovania `catalog/tips.json` | jediný zdroj pravdy | etapy 1–3 |
 
-The order is value per unit of risk. Channel A needs no CI, no network and no second repository, and
-covers the largest share of what would otherwise have to be written by hand. Channel C is last
-because it is the only part that requires changing a repository this plugin does not own.
+Poradie je podľa hodnoty na jednotku rizika. Kanál A nepotrebuje CI, sieť ani druhé repo a pokrýva
+najväčšiu časť toho, čo by sa inak muselo písať ručne. Kanál C je posledný, lebo je jediný, ktorý
+vyžaduje zmenu v repe, ktoré tento plugin nevlastní.
 
-Measurement — whether any of this changes behaviour — stays out of scope. Nothing leaves the machine.
+Meranie — či to vôbec mení správanie — zostáva mimo rozsahu. Zo stroja nič neodchádza.
 
-## Decision register
+## Register rozhodnutí
 
-Each row: what was chosen, what it was chosen over, and what would justify revisiting it.
+Každý záznam: čo bolo zvolené, voči čomu, a čo by oprávnilo prehodnotiť to.
 
-### D1 — Tip content lives next to the tool it describes
+### D1 — Obsah tipu žije vedľa nástroja, ktorý opisuje
 
-**Chosen:** a `tip.json` beside the skill or command, in the tool's own repository.
+**Zvolené:** `tip.json` vedľa skillu alebo commandu, vo vlastnom repe toho nástroja.
 
-**Over:**
-- *A central hand-maintained catalog.* The person who renames a command is not the person who
-  remembers the tip, so the catalog drifts and nobody notices — the only people who read a tip are
-  those who do not know the tool and cannot tell that it is wrong.
-- *`CLAUDE.md` or memory.* Both apply on every turn, cost context permanently, cannot be rate-limited,
-  cannot be shown a fixed number of times and cannot be suppressed for someone who already uses the
-  tool. A tip is a transient notice, not a standing instruction.
+**Voči:**
+- *Centrálnemu ručne udržiavanému katalógu.* Ten, kto premenuje command, nie je ten, kto si spomenie
+  na tip, takže katalóg sa rozchádza a nikto si to nevšimne — jediní ľudia, ktorí tip čítajú, sú tí,
+  čo ten nástroj nepoznajú, a tí nemajú ako rozpoznať, že je nesprávny.
+- *`CLAUDE.md` alebo memory.* Oboje platí v každom turne, trvalo stojí kontext, nedá sa rate-limitovať,
+  nedá sa zobraziť presne N-krát a nedá sa potlačiť pre niekoho, kto ten nástroj už používa. Tip je
+  dočasné oznámenie, nie trvalá inštrukcia.
 
-**Revisit if:** the catalog stops growing and tools stop being renamed, at which point central
-curation is less machinery for the same result.
+**Prehodnotiť, ak:** katalóg prestane rásť a nástroje sa prestanú premenúvať — vtedy je centrálna
+kurácia menej mašinérie za ten istý výsledok.
 
-### D2 — Three channels rather than one
+### D2 — Tri kanály namiesto jedného
 
-**Chosen:** split by whether the developer already has the thing.
+**Zvolené:** delenie podľa toho, či vývojár tú vec už má.
 
-**Over:** *one remote catalog for everything.* Simpler to explain, but it requires an entry per tool
-before anything can be said about it, and it cannot express the strongest tip available — that this
-person has a tool and has never invoked it. The split also means most tips need no publishing
-pipeline at all.
+**Voči:** *jednému vzdialenému katalógu na všetko.* Jednoduchšie sa vysvetľuje, ale vyžaduje záznam
+pre každý nástroj skôr, než sa o ňom dá čokoľvek povedať, a nevie vyjadriť najsilnejší dostupný tip —
+že tento človek nástroj má a nikdy ho nespustil. Delenie zároveň znamená, že väčšina tipov nepotrebuje
+publikačnú cestu vôbec.
 
-**Cost accepted:** three code paths and a merge step instead of one read.
+**Prijatá cena:** tri vetvy kódu a krok zlúčenia namiesto jedného čítania.
 
-### D3 — Discovery uses the `description` from `SKILL.md`
+### D3 — Detekcia používa `description` zo `SKILL.md`
 
-**Chosen:** generate tip copy from frontmatter when no `tip.json` exists.
+**Zvolené:** keď `tip.json` neexistuje, text tipu sa vygeneruje z frontmatteru.
 
-**Over:** *requiring `tip.json` for everything.* Better copy, but a new skill then produces no tip
-until someone writes one, which is exactly the lag this design exists to remove.
+**Voči:** *vyžadovaniu `tip.json` pre všetko.* Lepší text, ale nový skill potom nemá tip, kým ho niekto
+nenapíše — a to je presne to oneskorenie, kvôli ktorému tento dizajn vznikol.
 
-**Known weakness:** `description` is written to tell a model when a skill applies, not to persuade a
-human to try it. Some will read badly. The mitigation is that `tip.json` overrides it, so bad copy is
-fixable without changing the mechanism.
+**Známa slabina:** `description` je písaný preto, aby modelu povedal, kedy skill použiť, nie aby
+presvedčil človeka vyskúšať ho. Niektoré budú čítať zle. Poistkou je, že `tip.json` ho prebíja, takže
+zlý text sa dá opraviť bez zmeny mechanizmu.
 
-**Revisit if:** in practice most generated copy needs overriding anyway.
+**Prehodnotiť, ak:** sa v praxi ukáže, že väčšina vygenerovaných textov aj tak potrebuje prepísať.
 
-### D4 — Remote transport is `git`
+### D4 — Vzdialený prenos je `git`
 
-**Chosen:** shallow fetch from a bare repository under the plugin's data directory.
+**Zvolené:** shallow fetch z bare repozitára v dátovom priečinku pluginu.
 
-**Over:**
-- *Raw HTTP with a token.* `Kros.AiDevTools` is private, so this means shipping a credential inside a
-  plugin installed on every developer's machine. Rejected outright.
-- *A UNC file share.* Simplest on the corporate LAN and needs no credentials, but fails from home and
-  over VPN, and carries no history. Held as a fallback if `git` proves awkward.
-- *An internal HTTP service.* Hosting, deployment and monitoring for one JSON file.
+**Voči:**
+- *Surovému HTTP s tokenom.* `Kros.AiDevTools` je privátne, takže by to znamenalo distribuovať
+  credential vnútri pluginu nainštalovaného na stroji každého vývojára. Zamietnuté bez diskusie.
+- *UNC file share.* Najjednoduchšie na firemnej LAN a bez credentials, ale zlyhá z domu aj cez VPN a
+  nenesie históriu. Držané ako záloha, ak by `git` robil problémy.
+- *Internej HTTP službe.* Hosting, nasadenie a monitoring kvôli jednému JSON súboru.
 
-**Why it works:** `git` reuses Git Credential Manager, which the developer must already have
-configured — otherwise `plugin marketplace add` would not have worked for them either. Authentication
-costs nothing.
+**Prečo to funguje:** `git` použije Git Credential Manager, ktorý vývojár musí mať nakonfigurovaný —
+inak by mu nefungoval ani `plugin marketplace add`. Autentifikácia nestojí nič.
 
-### D5 — Nothing is published; the client reads the source
+### D5 — Nepublikuje sa nič; klient číta zdroj
 
-**Chosen:** no generated catalog at all. The refresh fetches `master` shallow and reads the authored
-`tip.json` files out of the tree, deriving the rest itself.
+**Zvolené:** žiadny generovaný katalóg. Refresh fetchne `master` shallow a prečíta si autorské
+`tip.json` priamo zo stromu; zvyšok si dopočíta sám.
 
-**Over:**
-- *An orphan branch holding a generated `tips.json`.* It works, but it is a build artifact to keep in
-  step with its source, produced by a bot, carrying content the client can read from that source just
-  as cheaply. Every problem it brought — the retrigger loop, branch protection, an artifact that can
-  go stale — is a problem of having an artifact at all.
-- *A generated file committed to `master`.* Either a bot pushes it, with the same loop and protection
-  problems, or every contributor regenerates it by hand — friction placed exactly on the people
-  writing tips voluntarily.
-- *A GitHub release asset.* Needs an API token against a private repository, which is D4's rejected
-  option again.
-- *A separate repository.* One more repository to create, permission and keep in sync, for one file.
+**Voči:**
+- *Orphan vetve s generovaným `tips.json`.* Funguje to, ale je to build artifact, ktorý treba držať v
+  súlade so zdrojom, vyrába ho bot a nesie obsah, ktorý klient vie prečítať z toho zdroja rovnako
+  lacno. Každý problém, ktorý priniesla — smyčka pri retriggeri, branch protection, artifact, ktorý
+  môže zostarnúť — je problémom toho, že artifact vôbec existuje.
+- *Generovanému súboru commitnutému do `master`.* Buď ho pushuje bot, s tými istými problémami so
+  smyčkou a ochranou vetvy, alebo ho každý prispievateľ pregenerúva ručne — trenie umiestnené presne
+  na ľudí, ktorí tipy píšu dobrovoľne.
+- *GitHub release assetu.* Potrebuje API token proti privátnemu repu, čo je znova zamietnutá možnosť
+  z D4.
+- *Samostatnému repu.* Ďalšie repo na založenie, oprávnenia a udržiavanie v súlade, kvôli jednému
+  súboru.
 
-**Cost accepted:** deriving `id`, `ref` and `install` moves into the client, so changing those rules
-needs a plugin release. They change far less often than content does, which was the entire criterion.
+**Prijatá cena:** odvodzovanie `id`, `ref` a `install` sa presúva do klienta, takže zmena týchto
+pravidiel si vyžiada vydanie pluginu. Menia sa ale rádovo zriedkavejšie než obsah, a to bolo celé
+kritérium.
 
-**Revisit if:** derivation grows past what is reasonable to do inside a hook, or the repository grows
-large enough that a shallow fetch of its tree stops being cheap.
+**Prehodnotiť, ak:** odvodzovanie prerastie to, čo je rozumné robiť v hooku, alebo repo narastie
+natoľko, že shallow fetch jeho stromu prestane byť lacný.
 
-### D6 — The refresh runs from `Stop`, detached, on a TTL
+### D6 — Refresh beží zo `Stop`, odpojene, na TTL
 
-**Chosen:** `Stop` checks the cache age and, when stale, spawns a detached process and exits.
+**Zvolené:** `Stop` skontroluje vek cache a keď je stará, spustí odpojený proces a skončí.
 
-**Over:**
-- *Fetching in `SessionStart`.* Puts the network on the path to the first prompt. Refused: a second of
-  startup latency will get the plugin uninstalled faster than any bad tip.
-- *`SessionStart`, detached.* Would also cover sessions where no turn completes, at the cost of a
-  process spawn at every session start. Marginal either way; `Stop` wins because bookkeeping already
-  runs there.
-- *An OS scheduled task.* The most reliable option and the most intrusive: a plugin that installs a
-  Windows scheduled task is hard to uninstall and hard to justify.
+**Voči:**
+- *Fetchu v `SessionStart`.* Dáva sieť na cestu k prvému promptu. Odmietnuté: sekunda pri štarte
+  odinštaluje plugin rýchlejšie než akýkoľvek zlý tip.
+- *`SessionStart` odpojene.* Pokrylo by aj session, v ktorých sa nedokončí žiadny turn, za cenu
+  spustenia procesu pri každom štarte. Rozdiel je zanedbateľný; `Stop` vyhráva preto, že tam už
+  bežia iné evidenčné veci.
+- *Naplánovanej úlohe v OS.* Najspoľahlivejšia možnosť a zároveň najinvazívnejšia: plugin, ktorý
+  zakladá Windows scheduled task, sa ťažko odinštaluje a ťažko obhajuje.
 
-### D7 — Tips are delivered at session start only
+### D7 — Tipy sa doručujú len pri štarte session
 
-**Chosen:** accept that a newly fetched catalog is used by the *next* session.
+**Zvolené:** prijať, že čerstvo stiahnutý katalóg použije až *nasledujúca* session.
 
-**Over:** *mid-session delivery via `UserPromptSubmit`*, for which the machinery already exists in
-`Show-Candidate.ps1`. Rejected because a scheduled tip interrupting work is more intrusive than one at
-startup — a retrospective notice earns that interruption by reacting to what the developer just did,
-a scheduled tip does not. Content on a 24-hour TTL gains nothing from arriving ninety seconds sooner.
+**Voči:** *doručeniu uprostred session cez `UserPromptSubmit`*, na ktoré mašinéria existuje v
+`Show-Candidate.ps1`. Zamietnuté preto, že plánovaný tip prerušujúci prácu je rušivejší než tip pri
+štarte — retrospektívne oznámenie si to prerušenie zaslúži tým, že reaguje na to, čo vývojár práve
+urobil, plánovaný tip nie. A nič sa tým nezíska: obsah s 24-hodinovým TTL nemá dôvod doraziť o
+deväťdesiat sekúnd skôr.
 
-### D8 — Policy travels in the fetched file, and is trusted
+### D8 — Politika cestuje v stiahnutom súbore a verí sa jej
 
-**Chosen:** `ttlHours`, `cooldownDays` and `enabled` live in the catalog; the plugin's values only
-bootstrap the first fetch. What the catalog says is what the hook does.
+**Zvolené:** `ttlHours`, `cooldownDays` a `enabled` žijú v katalógu; hodnoty v plugine slúžia len ako
+bootstrap pre prvý fetch. Čo povie ten súbor, to hook urobí.
 
-**Over:**
-- *Policy in the plugin.* Every change to the cadence would need a release, and — the decisive point —
-  there would be no way to silence a bad tip for everyone without asking each person to update.
-- *Clamping fetched values to bounds in the hook.* Rejected. A bound is a guess at which value is
-  wrong, made before anyone has seen the plugin misbehave in the field. The answer to a bad push is a
-  corrected push, or `enabled: false` until it is corrected — both of which reach everyone within one
-  TTL, which is faster than shipping a new client with different bounds. If real use shows the cadence
-  needs a floor, that is the moment to learn what the floor is.
+**Voči:**
+- *Politike v plugine.* Každá zmena kadencie by si vyžiadala vydanie a — rozhodujúci bod — neexistoval
+  by spôsob, ako umlčať zlý tip u všetkých bez toho, aby sa každý jeden človek aktualizoval.
+- *Orezávaniu stiahnutých hodnôt na medze v hooku.* Zamietnuté. Medza je hádanie, ktorá hodnota je
+  zlá, urobené skôr, než ktokoľvek videl plugin zlyhávať v prevádzke. Odpoveďou na zlý push je
+  opravený push, alebo `enabled: false`, kým sa neopraví — oboje dorazí do jedného TTL, čo je
+  rýchlejšie, než vydať nového klienta s inými medzami. Ak reálna prevádzka ukáže, že kadencia
+  potrebuje spodnú hranicu, vtedy je čas zistiť, aká tá hranica je.
 
-**Accepted consequence:** a bad push misconfigures every machine at once, until the next one fixes it.
+**Prijatý dôsledok:** zlý push rozkonfiguruje všetky stroje naraz, až kým to ďalší neopraví.
 
-### D9 — `published` is dropped in favour of a local `firstSeen`
+### D9 — `published` sa ruší v prospech lokálneho `firstSeen`
 
-**Chosen:** the hook records in `shown.json` when it first saw each `id`. There is no `published`
-field at all.
+**Zvolené:** hook si do `shown.json` zapíše, kedy dané `id` videl prvý raz. Pole `published` neexistuje.
 
-**Over:**
-- *Deriving it from git history.* A shallow fetch carries none, and keeping history around to date a
-  tip is a large cost for a small field.
-- *A hand-written date.* It drifts, it is forgotten, and nobody reviewing a pull request checks it.
+**Voči:**
+- *Odvodeniu z git histórie.* Shallow fetch žiadnu nenesie a držať históriu kvôli datovaniu jedného
+  poľa je veľká cena za malú vec.
+- *Ručne písanému dátumu.* Rozchádza sa, zabúda sa naň a nikto ho v review nekontroluje.
 
-**Why local is better and not merely cheaper:** the field exists to say how new an item is, and
-newness is relative to the reader. To somebody who joined last week, a two-year-old skill they have
-never heard of is new. `expires` stays an authored field — content going stale is a property of the
-content, not of the reader.
+**Prečo je lokálne lepšie, nielen lacnejšie:** to pole má povedať, aká nová je daná vec, a novosť je
+relatívna voči čitateľovi. Pre niekoho, kto nastúpil minulý týždeň, je dva roky starý skill, o ktorom
+nikdy nepočul, nový. `expires` zostáva autorským poľom — to, že obsah zastaral, je vlastnosťou obsahu,
+nie čitateľa.
 
-### D10 — Repository-local tips never enter the central catalog
+### D10 — Repo-lokálne tipy nikdy nevstupujú do centrálneho katalógu
 
-**Chosen:** read `.dev-tips/` live from the working directory.
+**Zvolené:** `.dev-tips/` sa číta naživo z pracovného priečinka.
 
-**Over:** *collecting them into the catalog by CI.* That needs a cross-repo token and a second
-publishing path for content that is already sitting on the disk, free to read, and correct per
-worktree.
+**Voči:** *ich zbieraniu do katalógu cez CI.* To potrebuje cross-repo token a druhú publikačnú cestu
+pre obsah, ktorý už leží na disku, dá sa prečítať zadarmo a je správny pre každý worktree zvlášť.
 
-### D11 — Usage is read out of the transcripts, not only recorded forward
+### D11 — Použitie sa číta z transcriptov, nielen zaznamenáva dopredu
 
-**Chosen:** the background refresh scans `~/.claude/projects/**/*.jsonl` for `Skill` invocations and
-backfills `usage.json`, so a tool somebody already uses is never advertised to them.
+**Zvolené:** refresh na pozadí prejde `~/.claude/projects/**/*.jsonl`, nájde volania skillov a doplní
+nimi `usage.json`, takže nástroj, ktorý niekto už používa, sa mu nikdy neponúkne.
 
-**Over:**
-- *Recording only from installation onwards*, which is what happens today. It makes a fresh install
-  maximally irritating: the developer is pitched the commands they have been using for months. That
-  is the single experience most likely to get the plugin switched off, and it lands on everyone
-  exactly once — on day one.
-- *Asking the developer what they already know.* A questionnaire at first run is friction in the worst
-  possible place, and people under-report anyway.
+**Voči:**
+- *Zaznamenávaniu len od inštalácie ďalej*, čo sa deje dnes. Robí to z čerstvej inštalácie maximálne
+  otravný zážitok: vývojárovi sa ponúkajú commandy, ktoré používa mesiace. To je jediná skúsenosť,
+  po ktorej si plugin najpravdepodobnejšie vypne, a každého zasiahne presne raz — hneď v prvý deň.
+- *Opýtaniu sa vývojára, čo už pozná.* Dotazník pri prvom spustení je trenie na najhoršom možnom
+  mieste a ľudia aj tak podhodnocujú.
 
-**Limits, all accepted:** transcripts are retained for a bounded window, so *never used* really means
-*not used lately* — which for this purpose is the better question to be answering. Skills invoked by
-a subagent count as use. It is per machine, like every other signal here.
+**Prijaté limity:** transcripty sa uchovávajú len obmedzený čas, takže *nikdy nepoužil* v skutočnosti
+znamená *nepoužil v poslednom čase* — čo je na tento účel lepšia otázka. Skill zavolaný subagentom sa
+počíta ako použitie. Platí to per stroj, ako každý iný signál tu.
 
-## Risks
+## Riziká
 
-| Risk | Severity | Response |
+| Riziko | Závažnosť | Odpoveď |
 |---|---|---|
-| A bad push to `dev-tips/config.json` misconfigures everyone | high | a corrected push, or `enabled: false`, within one TTL — deliberately not guarded client-side (D8) |
-| Nobody writes `tip.json`, so the pipeline yields nothing | medium | channel A produces tips without any authoring |
-| Generated copy reads poorly | medium | `tip.json` overrides per tip |
-| Retrospective notices fire on false positives | medium | wording stays *next time you can*, never *you should have* |
-| Desktop users get tips via the model, which may reword them | low | documented in `desktop-systemmessage-not-rendered.md`; upstream issue filed |
-| The detached fetch hangs on a credential prompt | low | prompting disabled, hard timeout, lock with a stale timeout |
+| Zlý push do `dev-tips/config.json` rozkonfiguruje všetkých | vysoká | opravený push, alebo `enabled: false`, do jedného TTL — zámerne bez poistky na strane klienta (D8) |
+| Nikto nenapíše `tip.json`, takže cesta nič neprinesie | stredná | kanál A vyrába tipy bez akéhokoľvek písania |
+| Vygenerovaný text číta zle | stredná | `tip.json` ho prebíja, tip po tipe |
+| Retrospektívne oznámenia vyskočia na falošnú zhodu | stredná | formulácia zostáva *nabudúce môžeš*, nikdy *mal si* |
+| Na desktope ide tip cez model, ktorý ho môže preformulovať | nízka | zdokumentované v `desktop-systemmessage-not-rendered.md`, issue nahlásené |
+| Odpojený fetch zamrzne na výzve na credentials | nízka | promptovanie vypnuté, tvrdý timeout, lock so stale timeoutom |
 
-## Open questions
+## Otvorené otázky
 
-1. **Who can add a validation workflow to `Kros.AiDevTools`?** Stage 3 needs no branch and no bot any
-   more, but it still needs somebody able to add CI there. Ownership is not established.
-2. **Where is `655507-dev-tips-plugin.md`?** The README cites it as the design of record; it is not in
-   any repository on this machine. Either link it or drop the reference.
-3. **Is disabling GCM prompting sufficient in practice?** The failure mode — a hidden process hanging
-   forever — is severe enough to deserve a deliberate test with a cleared credential, not an
-   assumption.
-4. **How would we ever know this works?** No measurement exists and none is planned. Accepted, but it
-   means every decision here is argued from reasoning rather than evidence, and the way to correct
-   them is to put the thing in front of people and watch what they switch off.
+1. **Kto vie pridať validačný workflow do `Kros.AiDevTools`?** Etapa 3 už nepotrebuje vetvu ani bota,
+   ale stále potrebuje niekoho, kto tam vie pridať CI. Vlastníctvo nie je určené.
+2. **Kde je `655507-dev-tips-plugin.md`?** README ho uvádza ako dizajn, o ktorý sa opiera; na tomto
+   stroji nie je v žiadnom repe. Buď ho prelinkovať, alebo tú zmienku zrušiť.
+3. **Stačí vypnutie promptovania GCM v praxi?** Spôsob zlyhania — skrytý proces visiaci navždy — je
+   dosť závažný na to, aby si zaslúžil zámerný test s vymazaným credentialom, nie predpoklad.
+4. **Ako by sme vôbec zistili, že to funguje?** Meranie neexistuje a neplánuje sa. Prijaté, ale
+   znamená to, že každé rozhodnutie tu stojí na úvahe, nie na dôkaze, a jediný spôsob, ako ich
+   opraviť, je dať tú vec pred ľudí a sledovať, čo si vypnú.
