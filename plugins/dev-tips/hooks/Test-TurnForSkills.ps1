@@ -21,6 +21,15 @@ try
     $stateDir = Get-StateDir
     Initialize-Log $stateDir
 
+    # First thing the hook does: it runs after every turn, so anything ahead of this is multiplied
+    # by the turn count. One spawn gate here; each job inside the refresh decides if it is due.
+    if (Test-StampStale -StateDir $stateDir -Name 'refresh' -Hours 6)
+    {
+        Update-Stamp -StateDir $stateDir -Name 'refresh'
+        Start-DataRefresh -StateDir $stateDir -HookRoot $PSScriptRoot
+        Write-Log 'stop: data refresh spawned'
+    }
+
     $ledger = Join-Path $stateDir ('turns/' + (Get-SessionId $payload) + '.txt')
     if (-not (Test-Path -LiteralPath $ledger)) { exit 0 }
 

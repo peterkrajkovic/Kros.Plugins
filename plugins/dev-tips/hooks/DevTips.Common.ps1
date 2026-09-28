@@ -191,3 +191,26 @@ Inak ho úplne ignoruj. Nesmie ovplyvniť tvoj postup pri jeho úlohe.
     }
     [pscustomobject]$output | ConvertTo-Json -Depth 6 -Compress
 }
+
+function Test-StampStale([string]$StateDir, [string]$Name, [int]$Hours)
+{
+    $path = Join-Path $StateDir "$Name.stamp"
+    if (-not (Test-Path -LiteralPath $path)) { return $true }
+    $age = (Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $path).LastWriteTimeUtc
+    return ($age.TotalHours -ge $Hours)
+}
+
+function Update-Stamp([string]$StateDir, [string]$Name)
+{
+    (Get-Date).ToUniversalTime().ToString('o') |
+        Set-Content -LiteralPath (Join-Path $StateDir "$Name.stamp") -Encoding UTF8
+}
+
+function Start-DataRefresh([string]$StateDir, [string]$HookRoot)
+{
+    # -WindowStyle Hidden, never -NoNewWindow: the child must not inherit the hook's stdout, which
+    # Claude Code parses as JSON.
+    Start-Process pwsh -WindowStyle Hidden -ArgumentList @(
+        '-NoProfile', '-File', (Join-Path $HookRoot 'Update-DevTipsData.ps1'),
+        '-StateDir', $StateDir) | Out-Null
+}
