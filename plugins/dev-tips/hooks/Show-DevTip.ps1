@@ -91,8 +91,9 @@ try
     $pick = ($candidates | Sort-Object Count, Last | Select-Object -First 1)
     $tip = $pick.Tip
     $installState = Get-InstallState $tip
-    Write-Log ("picked={0} | repo={1} | candidates={2} | shownBefore={3} | install={4}" -f
-        $tip.id, $repoName, $candidates.Count, $pick.Count, $installState)
+    $source = if ($tip.source) { $tip.source } else { 'packaged' }
+    Write-Log ("picked={0} | source={1} | repo={2} | candidates={3} | shownBefore={4} | install={5}" -f
+        $tip.id, $source, $repoName, $candidates.Count, $pick.Count, $installState)
 
     $userMessage = (New-TipText $tip $installState) + "`n`n" + (New-Question $tip $installState)
     $actionHint = New-ActionHint $tip $installState
