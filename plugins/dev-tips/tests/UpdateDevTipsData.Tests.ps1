@@ -47,3 +47,39 @@ Describe 'Update-DevTipsData.ps1' {
         Test-Path -LiteralPath (Join-Path $stateDir 'usage.json') | Should -BeFalse
     }
 }
+
+Describe 'Update-DevTipsData.ps1 remote step' {
+    It 'writes a snapshot from the fixture origin' {
+        $stateDir = New-TempDir
+
+        & pwsh -NoProfile -File $script:Script -StateDir $stateDir `
+            -ProjectsRoot (New-FakeTranscripts) -Origin (New-FixtureOriginRepo) -Branch 'master'
+        $LASTEXITCODE | Should -Be 0
+
+        $snapshot = Get-Content -LiteralPath (Join-Path $stateDir 'remote-tips.json') -Raw | ConvertFrom-Json
+        ($snapshot.tips | Where-Object id -eq 'git-diff').title | Should -Be 'From the source'
+        $snapshot.config.ttlHours | Should -Be 24
+    }
+
+    It 'logs a failed fetch and still exits 0, because the history job succeeded' {
+        $stateDir = New-TempDir
+
+        & pwsh -NoProfile -File $script:Script -StateDir $stateDir `
+            -ProjectsRoot (New-FakeTranscripts) -Origin 'C:\no\such\repo' -Branch 'master'
+        $LASTEXITCODE | Should -Be 0
+
+        (Get-Content -LiteralPath (Join-Path $stateDir 'debug.log') -Raw) | Should -Match 'fetch failed'
+        Test-Path -LiteralPath (Join-Path $stateDir 'usage.json') | Should -BeTrue
+    }
+
+    It 'skips the fetch when the remote stamp is fresh' {
+        $stateDir = New-TempDir
+        (Get-Date).ToUniversalTime().ToString('o') |
+            Set-Content -LiteralPath (Join-Path $stateDir 'remote.stamp') -Encoding UTF8
+
+        & pwsh -NoProfile -File $script:Script -StateDir $stateDir `
+            -ProjectsRoot (New-FakeTranscripts) -Origin (New-FixtureOriginRepo) -Branch 'master'
+
+        Test-Path -LiteralPath (Join-Path $stateDir 'remote-tips.json') | Should -BeFalse
+    }
+}

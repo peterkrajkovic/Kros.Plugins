@@ -10,6 +10,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$StateDir,
     [string]$ProjectsRoot,
+    [string]$Origin = 'https://github.com/Kros-sk/Kros.AiDevTools.git',
+    [string]$Branch = 'master',
     [int]$HistoryWindowDays = 90,
     [int]$HistoryTtlHours = 24,
     [int]$LockStaleMinutes = 30
@@ -19,6 +21,7 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'DevTips.Common.ps1')
 . (Join-Path $PSScriptRoot 'DevTips.History.ps1')
+. (Join-Path $PSScriptRoot 'DevTips.Remote.ps1')
 
 if (-not (Test-Path -LiteralPath $StateDir)) { New-Item -ItemType Directory -Path $StateDir -Force | Out-Null }
 Initialize-Log $StateDir
@@ -64,6 +67,52 @@ try
     else
     {
         Write-Log 'refresh: history stamp fresh, skipped'
+    }
+
+    $previous = Read-JsonFile (Join-Path $StateDir 'remote-tips.json')
+    $ttlHours = if ($null -ne $previous -and $null -ne $previous.config -and $null -ne $previous.config.ttlHours)
+                { [int]$previous.config.ttlHours } else { 24 }
+
+    if (Test-StampStale -StateDir $StateDir -Name 'remote' -Hours $ttlHours)
+    {
+        try
+        {
+            $mirror = Join-Path $StateDir 'remote'
+            if (-not (Invoke-MirrorFetch -MirrorPath $mirror -Origin $Origin -Branch $Branch))
+            {
+                Write-Log "refresh: fetch failed | origin=$Origin | branch=$Branch"
+            }
+            else
+            {
+                $files = Get-RemoteTipFiles -MirrorPath $mirror
+                $config = ($files | Where-Object { $_.path -like '*dev-tips/config.json' } | Select-Object -First 1).json
+                $marketplace = 'kros-ai-dev-tools'
+
+                $tips = @()
+                foreach ($file in $files)
+                {
+                    if ($file.path -like '*dev-tips/config.json') { continue }
+                    if ($file.path -like '*dev-tips/manual.json')
+                    {
+                        foreach ($manual in @($file.json.tips)) { $tips += $manual }
+                        continue
+                    }
+                    $tips += (ConvertTo-Tip -Path $file.path -Json $file.json -Marketplace $marketplace)
+                }
+
+                Write-RemoteSnapshot -StateDir $StateDir -Tips $tips -Config $config
+                Update-Stamp -StateDir $StateDir -Name 'remote'
+                Write-Log ('refresh: snapshot written | tips={0}' -f $tips.Count)
+            }
+        }
+        catch
+        {
+            Write-Log ('refresh: remote step failed | {0}' -f $_.Exception.Message)
+        }
+    }
+    else
+    {
+        Write-Log 'refresh: remote stamp fresh, skipped'
     }
 
     exit 0
