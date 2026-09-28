@@ -48,6 +48,27 @@ function Read-SkillFrontmatter([string]$Path)
 # spends our one notice per cooldown on something that is not ours to recommend.
 $script:DefaultMarketplaces = @('kros-ai-dev-tools', 'kros-plugins')
 
+# A skill's description is written for a model deciding whether to invoke it, so it can run to
+# several sentences. The notice is two lines. 240 is the same cap Test-TipFiles.ps1 enforces on
+# authored bodies, so both kinds of tip read the same length.
+function ConvertTo-TipBody([string]$Text, [int]$MaxLength = 240)
+{
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $Text }
+    $Text = $Text.Trim()
+    if ($Text.Length -le $MaxLength) { return $Text }
+
+    # Ending on a sentence reads like copy; ending mid-sentence reads like a bug. Take the last
+    # sentence that fits, as long as it leaves something worth reading.
+    $window = $Text.Substring(0, $MaxLength)
+    $cut = -1
+    foreach ($m in [regex]::Matches($window, '[.!?](\s|$)')) { $cut = $m.Index }
+    if ($cut -ge 60) { return $window.Substring(0, $cut + 1) }
+
+    $space = $window.LastIndexOf(' ')
+    if ($space -lt 60) { $space = $MaxLength - 1 }
+    return $window.Substring(0, $space).TrimEnd(',', ';', ' ', '-') + [char]0x2026
+}
+
 function Get-DiscoveredTips([string]$StateDir, [string]$PluginsRoot, [string[]]$Marketplaces)
 {
     if ($null -eq $Marketplaces -or $Marketplaces.Count -eq 0) { $Marketplaces = $script:DefaultMarketplaces }
@@ -89,7 +110,7 @@ function Get-DiscoveredTips([string]$StateDir, [string]$PluginsRoot, [string[]]$
                     id             = $fm.name
                     kind           = 'skill'
                     title          = "/$qualified"
-                    body           = $fm.description
+                    body           = ConvertTo-TipBody $fm.description
                     ref            = "/$qualified"
                     repos          = @('*')
                     maxShows       = 3

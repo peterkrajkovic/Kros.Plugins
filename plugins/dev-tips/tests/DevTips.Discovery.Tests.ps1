@@ -43,6 +43,34 @@ Describe 'Read-SkillFrontmatter' {
     }
 }
 
+Describe 'ConvertTo-TipBody' {
+    It 'leaves a short description alone' {
+        ConvertTo-TipBody 'Short enough already.' | Should -Be 'Short enough already.'
+    }
+
+    It 'cuts a long description at a sentence boundary' {
+        $text = 'Creates an Azure DevOps pull request (as draft) from the current branch using the az CLI. ' +
+                'Automatically detects the org/project/repo from the git remote URL, parses a work item ID ' +
+                'from the branch name if present (format: bugfix/12345-description), and generates a PR title ' +
+                'and description by analyzing git commits and diff against master.'
+
+        $body = ConvertTo-TipBody $text
+
+        $body | Should -Be 'Creates an Azure DevOps pull request (as draft) from the current branch using the az CLI.'
+        $body | Should -Not -Match '…'
+    }
+
+    It 'falls back to a word boundary and an ellipsis when there is no sentence to end on' {
+        $text = 'word ' * 100
+
+        $body = ConvertTo-TipBody $text
+
+        $body.Length | Should -BeLessOrEqual 240
+        $body | Should -Match '…$'
+        $body | Should -Not -Match ' …$' -Because 'the ellipsis follows the last word, not a space'
+    }
+}
+
 Describe 'Get-DiscoveredTips' {
     It 'produces a tip for an installed but unused skill' {
         $tips = Get-DiscoveredTips -StateDir (New-TempDir) -PluginsRoot (New-FakePluginsRoot)
