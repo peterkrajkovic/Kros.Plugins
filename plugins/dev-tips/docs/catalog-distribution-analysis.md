@@ -216,6 +216,22 @@ nimi `usage.json`, takže nástroj, ktorý niekto už používa, sa mu nikdy nep
 znamená *nepoužil v poslednom čase* — čo je na tento účel lepšia otázka. Skill zavolaný subagentom sa
 počíta ako použitie. Platí to per stroj, ako každý iný signál tu.
 
+### D12 — Detekcia ponúka len pluginy z našich marketplaceov
+
+**Zvolené:** allow-list marketplaceov, defaultne `kros-ai-dev-tools` a `kros-plugins`, prepisateľný
+cez `discoverMarketplaces` v stiahnutej konfigurácii.
+
+**Voči:**
+- *Ponúkaniu všetkého, čo je na stroji nainštalované.* Pôvodné správanie. Stroj bežne nesie aj
+  cudzie nástroje — `superpowers`, `anthropic-skills` — ku ktorým sme nepísali text, nemáme pod
+  kontrolou, kedy sa zmenia, a tip na ne minú to jedno oznámenie za cooldown na niečo, čo nám
+  neprináleží odporúčať.
+- *Filtrovaniu podľa prefixu názvu pluginu (`kros-*`).* Vyzerá jednoduchšie a je nesprávne: `teapie`
+  ani `push` sa tak nevolajú, hoci naše sú. Vlastníctvo vyjadruje marketplace, nie názov.
+
+**Prijatý dôsledok:** ak sa nájde cudzí nástroj, ktorý stále za propagáciu, treba ho do zoznamu
+pridat vedome — alebo mu napísať vlastný `tip.json` a nespoliehať sa na jeho `description`.
+
 ## Riziká
 
 | Riziko | Závažnosť | Odpoveď |

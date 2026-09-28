@@ -64,6 +64,16 @@ is verifiably true for that one developer.
 This channel is why a new skill in `kros-shared` needs no `dev-tips` release. The developer updates
 `kros-shared` because they want the skill; `dev-tips` sees it on the next session.
 
+Discovery is limited to plugins from **our own marketplaces** — `kros-ai-dev-tools` and
+`kros-plugins` by default, overridable through `discoverMarketplaces` in the fetched config. A
+machine typically carries third-party tooling as well; we did not write its copy, we do not control
+when it changes, and a tip for it spends the one notice per cooldown on something that is not ours
+to recommend.
+
+A skill's `description` is frequently a YAML block scalar (`description: >`), which half of ours are.
+Reading only the first line yields a tip whose entire body is `>`, so the reader has to fold the
+block: `>` joins its lines with spaces, `|` keeps the newlines.
+
 `usage.json` on its own knows only what `Record-SkillUse.ps1` has recorded since the plugin was
 installed, which leaves the newest developer worst served: they are told about the command they have
 been using for two months. The past is on disk anyway — Claude Code writes every skill invocation to
@@ -293,7 +303,12 @@ Policy is authored rather than generated, so it is an ordinary file in the same 
 from — `dev-tips/config.json`:
 
 ```json
-{ "ttlHours": 24, "cooldownDays": 2, "enabled": true }
+{
+  "ttlHours": 24,
+  "cooldownDays": 2,
+  "enabled": true,
+  "discoverMarketplaces": ["kros-ai-dev-tools", "kros-plugins"]
+}
 ```
 
 The plugin's own values only bootstrap the first fetch. After that, what this file says is what the
