@@ -47,12 +47,18 @@ function Get-DiscoveredTips([string]$StateDir, [string]$PluginsRoot)
                 if ($seen.ContainsKey($fm.name)) { continue }
                 $seen[$fm.name] = $true
 
+                # What the developer types is the plugin-qualified form. The bare name is not
+                # guaranteed to resolve, and telling somebody to run a command that does not exist
+                # is worse than saying nothing. `id` and `suppressIfUsed` stay bare: ids are how
+                # authored tips override discovered ones, and Test-AlreadyUsed matches either form.
+                $qualified = "$pluginName`:$($fm.name)"
+
                 $tip = [pscustomobject]@{
                     id             = $fm.name
                     kind           = 'skill'
-                    title          = "/$($fm.name)"
+                    title          = "/$qualified"
                     body           = $fm.description
-                    ref            = "/$($fm.name)"
+                    ref            = "/$qualified"
                     repos          = @('*')
                     maxShows       = 3
                     suppressIfUsed = $fm.name

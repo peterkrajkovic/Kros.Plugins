@@ -798,8 +798,10 @@ Describe 'Get-DiscoveredTips' {
         $tips = Get-DiscoveredTips -StateDir (New-TempDir) -PluginsRoot (New-FakePluginsRoot)
 
         $tips.Count | Should -Be 1
-        $tips[0].id | Should -Be 'git-diff'
-        $tips[0].ref | Should -Be '/git-diff'
+        $tips[0].id | Should -Be 'git-diff' -Because 'ids stay bare so authored tips can override by id'
+        $tips[0].ref | Should -Be '/kros-shared:git-diff' -Because 'the bare form may not resolve for a plugin skill'
+        $tips[0].title | Should -Be '/kros-shared:git-diff'
+        $tips[0].suppressIfUsed | Should -Be 'git-diff' -Because 'usage.json is matched on either form'
         $tips[0].kind | Should -Be 'skill'
         $tips[0].install.plugin | Should -Be 'kros-shared'
         $tips[0].install.marketplace | Should -Be 'kros-ai-dev-tools'
@@ -880,12 +882,18 @@ function Get-DiscoveredTips([string]$StateDir, [string]$PluginsRoot)
                 if ($seen.ContainsKey($fm.name)) { continue }
                 $seen[$fm.name] = $true
 
+                # What the developer types is the plugin-qualified form. The bare name is not
+                # guaranteed to resolve, and telling somebody to run a command that does not exist
+                # is worse than saying nothing. `id` and `suppressIfUsed` stay bare: ids are how
+                # authored tips override discovered ones, and Test-AlreadyUsed matches either form.
+                $qualified = "$pluginName`:$($fm.name)"
+
                 $tip = [pscustomobject]@{
                     id             = $fm.name
                     kind           = 'skill'
-                    title          = "/$($fm.name)"
+                    title          = "/$qualified"
                     body           = $fm.description
-                    ref            = "/$($fm.name)"
+                    ref            = "/$qualified"
                     repos          = @('*')
                     maxShows       = 3
                     suppressIfUsed = $fm.name

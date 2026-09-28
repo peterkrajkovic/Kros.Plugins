@@ -28,8 +28,10 @@ Describe 'Get-DiscoveredTips' {
         $tips = Get-DiscoveredTips -StateDir (New-TempDir) -PluginsRoot (New-FakePluginsRoot)
 
         $tips.Count | Should -Be 1
-        $tips[0].id | Should -Be 'git-diff'
-        $tips[0].ref | Should -Be '/git-diff'
+        $tips[0].id | Should -Be 'git-diff' -Because 'ids stay bare so authored tips can override by id'
+        $tips[0].ref | Should -Be '/kros-shared:git-diff' -Because 'the bare form may not resolve for a plugin skill'
+        $tips[0].title | Should -Be '/kros-shared:git-diff'
+        $tips[0].suppressIfUsed | Should -Be 'git-diff' -Because 'usage.json is matched on either form'
         $tips[0].kind | Should -Be 'skill'
         $tips[0].install.plugin | Should -Be 'kros-shared'
         $tips[0].install.marketplace | Should -Be 'kros-ai-dev-tools'
