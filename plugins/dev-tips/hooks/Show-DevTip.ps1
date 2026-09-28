@@ -109,7 +109,17 @@ try
     Write-HookOutput 'SessionStart' $userMessage 'Tip pre používateľa.' $actionHint
 
     $nowIso = $today.ToString('o')
-    $entries[$tip.id] = [pscustomobject]@{ count = $pick.Count + 1; last = $nowIso }
+
+    # firstSeen replaces the catalog's old `published` field: how new an item is, is relative to the
+    # reader. To somebody who joined last week, a two-year-old skill they never heard of is new.
+    $existing = if ($entries.ContainsKey($tip.id)) { $entries[$tip.id] } else { $null }
+    $firstSeen = if ($null -ne $existing -and $existing.firstSeen) { $existing.firstSeen } else { $nowIso }
+
+    $entries[$tip.id] = [pscustomobject]@{
+        count     = $pick.Count + 1
+        last      = $nowIso
+        firstSeen = $firstSeen
+    }
     Write-JsonFile $shownPath ([pscustomobject]@{
         lastShownAt     = $nowIso
         lastCandidateAt = if ($null -ne $shown) { $shown.lastCandidateAt } else { $null }

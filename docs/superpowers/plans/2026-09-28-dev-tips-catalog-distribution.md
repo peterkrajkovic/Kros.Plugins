@@ -143,7 +143,7 @@ Both hooks read `catalog/tips.json` directly today. Route them through one funct
 
 **Interfaces:**
 - Consumes: `Read-JsonFile`, `Get-PluginRoot` from `DevTips.Common.ps1`.
-- Produces: `Get-TipCatalog([string]$StateDir, [string]$PluginRoot)` returning `[pscustomobject]@{ tips = @(...); config = [pscustomobject] }`. `tips` is an array in the shape the hooks already iterate: objects with `id`, `kind`, `title`, `body`, `ref`, `repos`, `maxShows`, `install`, optional `when`, `expires`, `suppressIfUsed`. `config` carries `cooldownDays`, `candidateCooldownHours`, `ttlHours`, `enabled`.
+- Produces: `Get-TipCatalog([string]$StateDir, [string]$PluginRoot, [string]$PluginsRoot)` returning `[pscustomobject]@{ tips = @(...); config = [pscustomobject] }`. `tips` is an array in the shape the hooks already iterate: objects with `id`, `kind`, `title`, `body`, `ref`, `repos`, `maxShows`, `install`, optional `when`, `expires`, `suppressIfUsed`. `config` carries `cooldownDays`, `candidateCooldownHours`, `ttlHours`, `enabled`.
 
 - [ ] **Step 1: Write the fixture helper**
 
@@ -185,7 +185,7 @@ Describe 'Get-TipCatalog' {
                                         -Config @{ cooldownDays = 2 }
         $stateDir = New-TempDir
 
-        $result = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot
+        $result = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot -PluginsRoot (New-TempDir)
 
         $result.tips.Count | Should -Be 1
         $result.tips[0].id | Should -Be 'alpha'
@@ -193,7 +193,7 @@ Describe 'Get-TipCatalog' {
     }
 
     It 'returns an empty tip list rather than null when the catalog is missing' {
-        $result = Get-TipCatalog -StateDir (New-TempDir) -PluginRoot (New-TempDir)
+        $result = Get-TipCatalog -StateDir (New-TempDir) -PluginRoot (New-TempDir) -PluginsRoot (New-TempDir)
 
         ($result.tips -is [array]) | Should -BeTrue -Because 'callers foreach over it without a null check'
         $result.tips.Count | Should -Be 0
@@ -251,7 +251,7 @@ Dot-source the new file next to the existing one, near the top of the script:
 Replace the catalog and config reads (the block starting `$catalog = Read-JsonFile (Join-Path $pluginRoot 'catalog/tips.json')` down to the `$cooldownDays = ...` line) with:
 
 ```powershell
-    $catalog = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot
+    $catalog = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot -PluginsRoot (New-TempDir)
     if ($catalog.tips.Count -eq 0)
     {
         Write-Log 'exit: catalog missing or empty'
@@ -978,7 +978,10 @@ function Merge-Tips([object[]]$Authored, [object[]]$Discovered)
     $byId = [ordered]@{}
     foreach ($tip in @($Discovered)) { if ($null -ne $tip) { $byId[$tip.id] = $tip } }
     foreach ($tip in @($Authored)) { if ($null -ne $tip) { $byId[$tip.id] = $tip } }
-    return @($byId.Values)
+
+    # The comma is load-bearing: returning @() unrolls to nothing, and the caller's property
+    # becomes $null instead of an empty array.
+    return ,@($byId.Values)
 }
 ```
 
@@ -1572,7 +1575,7 @@ Describe 'Get-TipCatalog with a remote snapshot' {
             tips      = @([pscustomobject]@{ id = 'remote-one'; title = 'R'; body = 'b'; repos = @('*') })
         }) | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $stateDir 'remote-tips.json') -Encoding UTF8
 
-        $result = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot
+        $result = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot -PluginsRoot (New-TempDir)
 
         $result.config.cooldownDays | Should -Be 0 -Because 'fetched values are used as given, never clamped'
         ($result.tips | Where-Object id -eq 'remote-one') | Should -Not -BeNullOrEmpty
@@ -1587,7 +1590,7 @@ Describe 'Get-TipCatalog with a remote snapshot' {
             tips   = @()
         }) | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $stateDir 'remote-tips.json') -Encoding UTF8
 
-        (Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot).tips.Count | Should -Be 0
+        (Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot -PluginsRoot (New-TempDir)).tips.Count | Should -Be 0
     }
 }
 ```
