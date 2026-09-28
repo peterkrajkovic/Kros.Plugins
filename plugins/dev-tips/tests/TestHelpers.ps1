@@ -15,6 +15,34 @@ function New-FakePluginRoot([hashtable]$Tips, [hashtable]$Config)
     return $root
 }
 
+function New-FakePluginsRoot
+{
+    # Builds ~/.claude/plugins with one installed plugin carrying one skill.
+    $root = New-TempDir
+    $installPath = Join-Path $root 'cache/kros-ai-dev-tools/kros-shared/abc123'
+    New-Item -ItemType Directory -Path (Join-Path $installPath 'skills/git-diff') -Force | Out-Null
+
+    @(
+        '---'
+        'name: git-diff'
+        'description: Analyze git changes against master.'
+        '---'
+        ''
+        'body text'
+    ) | Set-Content -LiteralPath (Join-Path $installPath 'skills/git-diff/SKILL.md') -Encoding UTF8
+
+    $installed = [pscustomobject]@{
+        version = 2
+        plugins = [pscustomobject]@{
+            'kros-shared@kros-ai-dev-tools' = @(
+                [pscustomobject]@{ scope = 'user'; installPath = $installPath; version = 'abc123' }
+            )
+        }
+    }
+    $installed | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $root 'installed_plugins.json') -Encoding UTF8
+    return $root
+}
+
 function New-FakeTranscripts
 {
     # Two skill invocations and one line that is not one, in the layout Claude Code uses.
