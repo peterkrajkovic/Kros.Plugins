@@ -14,6 +14,7 @@ try { $payload = [Console]::In.ReadToEnd() | ConvertFrom-Json } catch { $payload
 if ($null -ne $payload -and $payload.stop_hook_active -eq $true) { exit 0 }
 
 . (Join-Path $PSScriptRoot 'DevTips.Common.ps1')
+. (Join-Path $PSScriptRoot 'DevTips.Catalog.ps1')
 
 try
 {
@@ -27,8 +28,8 @@ try
     Remove-Item -LiteralPath $ledger -Force
     if ($commands.Count -eq 0) { exit 0 }
 
-    $catalog = Read-JsonFile (Join-Path (Get-PluginRoot) 'catalog/tips.json')
-    if ($null -eq $catalog -or $null -eq $catalog.tips) { exit 0 }
+    $catalog = Get-TipCatalog -StateDir $stateDir -PluginRoot (Get-PluginRoot)
+    if ($catalog.tips.Count -eq 0) { exit 0 }
 
     $repoName = Get-RepoName
     $best = $null

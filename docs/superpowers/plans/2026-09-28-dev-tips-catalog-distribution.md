@@ -195,7 +195,7 @@ Describe 'Get-TipCatalog' {
     It 'returns an empty tip list rather than null when the catalog is missing' {
         $result = Get-TipCatalog -StateDir (New-TempDir) -PluginRoot (New-TempDir)
 
-        $result.tips | Should -Not -BeNullOrEmpty -Because 'an empty array is still an array'
+        ($result.tips -is [array]) | Should -BeTrue -Because 'callers foreach over it without a null check'
         $result.tips.Count | Should -Be 0
     }
 }

@@ -11,6 +11,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'DevTips.Common.ps1')
+. (Join-Path $PSScriptRoot 'DevTips.Catalog.ps1')
 
 try
 {
@@ -24,15 +25,15 @@ try
     Write-Log ("run start | pid={0} | dryRun={1} | force={2} | CLAUDE_PLUGIN_DATA={3} | pluginRoot={4} | cwd={5}" -f
         $PID, $DryRun.IsPresent, $Force.IsPresent, $dataEnv, $pluginRoot, (Get-Location).Path)
 
-    $catalog = Read-JsonFile (Join-Path $pluginRoot 'catalog/tips.json')
-    if ($null -eq $catalog -or $null -eq $catalog.tips)
+    $catalog = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot
+    if ($catalog.tips.Count -eq 0)
     {
         Write-Log 'exit: catalog missing or empty'
         exit 0
     }
 
-    $config = Read-JsonFile (Join-Path $pluginRoot 'catalog/config.json')
-    $cooldownDays = if ($null -ne $config -and $null -ne $config.cooldownDays) { [int]$config.cooldownDays } else { 2 }
+    $config = $catalog.config
+    $cooldownDays = if ($null -ne $config.cooldownDays) { [int]$config.cooldownDays } else { 2 }
 
     $shownPath = Join-Path $stateDir 'shown.json'
     $shown = Read-JsonFile $shownPath
