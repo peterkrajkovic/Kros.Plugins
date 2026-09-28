@@ -153,3 +153,22 @@ The reasoning and the rejected alternatives are in
 | `expires` | optional; the tip stops being offered after this date |
 | `maxShows` | how many times one developer may see it |
 | `install` | `marketplace`, `repo`, `plugin` — drives the install variants above; `null` for ADRs and conventions |
+
+## Publishing tips
+
+Tips are authored in `Kros-sk/Kros.AiDevTools`, one `tip.json` beside the skill or command it
+describes. Nothing is generated and nothing is published: the plugin fetches `master` shallow and
+reads those files. See `docs/catalog-distribution.md`.
+
+`tools/Test-TipFiles.ps1` and `tools/dev-tips-validate.yml` are the validator for that repository.
+Copy them to `tools/` and `.github/workflows/` there. They are kept and tested here because this is
+where the format is defined.
+
+## Tests
+
+```bash
+pwsh -NoProfile -Command "Invoke-Pester -Path plugins/dev-tips/tests -Output Detailed"
+```
+
+Pester 5 is required. No test reaches the network or the real profile: transcripts, plugin
+installations and the remote origin are all built as fixtures in a temp directory.

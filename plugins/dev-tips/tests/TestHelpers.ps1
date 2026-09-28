@@ -26,6 +26,11 @@ function New-FixtureOriginRepo
 
     ([pscustomobject]@{ kind = 'command'; title = 'From the source'; body = 'authored'; repos = @('*'); maxShows = 2 }) |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $skillDir 'tip.json') -Encoding UTF8
+
+    # The SKILL.md has to exist: a tip beside a tool that is not there is exactly what the validator
+    # is for, so a fixture without it is not a well-formed repository.
+    @('---', 'name: git-diff', 'description: Analyze git changes against master.', '---') |
+        Set-Content -LiteralPath (Join-Path $skillDir 'SKILL.md') -Encoding UTF8
     ([pscustomobject]@{ ttlHours = 24; cooldownDays = 2; enabled = $true }) |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $repo 'dev-tips/config.json') -Encoding UTF8
     ([pscustomobject]@{ name = 'kros-ai-dev-tools' }) |
