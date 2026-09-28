@@ -61,7 +61,13 @@ function Get-TipCatalog([string]$StateDir, [string]$PluginRoot, [string]$Plugins
     $tips = @($tips) + @(Get-RepoTips -RepoRoot $RepoRoot)
 
     $discovered = @()
-    try { $discovered = Get-DiscoveredTips -StateDir $StateDir -PluginsRoot $PluginsRoot } catch { }
+    try
+    {
+        # discoverMarketplaces is policy, so it travels in the fetched config like the rest of it.
+        $discovered = Get-DiscoveredTips -StateDir $StateDir -PluginsRoot $PluginsRoot `
+                                         -Marketplaces $config.discoverMarketplaces
+    }
+    catch { }
 
     return [pscustomobject]@{ tips = (Merge-Tips -Authored $tips -Discovered $discovered); config = $config }
 }

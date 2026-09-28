@@ -11,16 +11,47 @@ function Read-SkillFrontmatter([string]$Path)
     for ($i = 1; $i -lt $lines.Count; $i++)
     {
         if ($lines[$i].Trim() -eq '---') { break }
+
         if ($lines[$i] -match '^name:\s*(.+)$') { $name = $Matches[1].Trim() }
-        elseif ($lines[$i] -match '^description:\s*(.+)$') { $description = $Matches[1].Trim() }
+        elseif ($lines[$i] -match '^description:\s*(.*)$')
+        {
+            $value = $Matches[1].Trim()
+
+            # Half our skills write the description as a YAML block scalar. Taking the first line
+            # literally yields a tip whose entire body is ">".
+            if ($value -match '^[>|][-+]?$')
+            {
+                $separator = if ($value.StartsWith('|')) { "`n" } else { ' ' }
+                $block = @()
+                for ($j = $i + 1; $j -lt $lines.Count; $j++)
+                {
+                    if ($lines[$j].Trim() -eq '---') { break }
+                    if ($lines[$j] -notmatch '^\s+\S') { break }
+                    $block += $lines[$j].Trim()
+                    $i = $j
+                }
+                $description = ($block -join $separator)
+            }
+            else
+            {
+                $description = $value
+            }
+        }
     }
 
     if ([string]::IsNullOrWhiteSpace($name)) { return $null }
     return [pscustomobject]@{ name = $name; description = $description }
 }
 
-function Get-DiscoveredTips([string]$StateDir, [string]$PluginsRoot)
+# Marketplaces whose plugins we are willing to advertise. Anything else on the machine is somebody
+# else's tooling: we have not written its copy, we do not control when it changes, and a tip for it
+# spends our one notice per cooldown on something that is not ours to recommend.
+$script:DefaultMarketplaces = @('kros-ai-dev-tools', 'kros-plugins')
+
+function Get-DiscoveredTips([string]$StateDir, [string]$PluginsRoot, [string[]]$Marketplaces)
 {
+    if ($null -eq $Marketplaces -or $Marketplaces.Count -eq 0) { $Marketplaces = $script:DefaultMarketplaces }
+
     $installed = Read-JsonFile (Join-Path $PluginsRoot 'installed_plugins.json')
     if ($null -eq $installed -or $null -eq $installed.plugins) { return @() }
 
@@ -33,6 +64,7 @@ function Get-DiscoveredTips([string]$StateDir, [string]$PluginsRoot)
         if ($parts.Count -ne 2) { continue }
         $pluginName = $parts[0]
         $marketplace = $parts[1]
+        if ($Marketplaces -notcontains $marketplace) { continue }
 
         foreach ($install in @($entry.Value))
         {

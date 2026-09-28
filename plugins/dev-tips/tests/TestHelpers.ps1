@@ -58,11 +58,24 @@ function New-FakePluginsRoot
         'body text'
     ) | Set-Content -LiteralPath (Join-Path $installPath 'skills/git-diff/SKILL.md') -Encoding UTF8
 
+    # A second plugin from somebody else's marketplace, to prove it is filtered out.
+    $foreignPath = Join-Path $root 'cache/claude-plugins-official/superpowers/6.3.0'
+    New-Item -ItemType Directory -Path (Join-Path $foreignPath 'skills/using-git-worktrees') -Force | Out-Null
+    @(
+        '---'
+        'name: using-git-worktrees'
+        'description: Use when starting feature work that needs isolation.'
+        '---'
+    ) | Set-Content -LiteralPath (Join-Path $foreignPath 'skills/using-git-worktrees/SKILL.md') -Encoding UTF8
+
     $installed = [pscustomobject]@{
         version = 2
         plugins = [pscustomobject]@{
             'kros-shared@kros-ai-dev-tools' = @(
                 [pscustomobject]@{ scope = 'user'; installPath = $installPath; version = 'abc123' }
+            )
+            'superpowers@claude-plugins-official' = @(
+                [pscustomobject]@{ scope = 'user'; installPath = $foreignPath; version = '6.3.0' }
             )
         }
     }
