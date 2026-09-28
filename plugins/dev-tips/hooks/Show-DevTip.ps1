@@ -1,0 +1,128 @@
+#!/usr/bin/env pwsh
+# SessionStart: the scheduled notice — one tip per session, rate-limited, never twice for something
+# the developer already uses. Retrospective notices go through Show-Candidate.ps1 instead.
+
+[CmdletBinding()]
+param(
+    [switch]$Force,
+    [switch]$DryRun
+)
+
+$ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'DevTips.Common.ps1')
+
+try
+{
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+    $pluginRoot = Get-PluginRoot
+    $stateDir = Get-StateDir
+    Initialize-Log $stateDir
+
+    $dataEnv = if ([string]::IsNullOrWhiteSpace($env:CLAUDE_PLUGIN_DATA)) { 'unset' } else { 'set' }
+    Write-Log ("run start | pid={0} | dryRun={1} | force={2} | CLAUDE_PLUGIN_DATA={3} | pluginRoot={4} | cwd={5}" -f
+        $PID, $DryRun.IsPresent, $Force.IsPresent, $dataEnv, $pluginRoot, (Get-Location).Path)
+
+    $catalog = Read-JsonFile (Join-Path $pluginRoot 'catalog/tips.json')
+    if ($null -eq $catalog -or $null -eq $catalog.tips)
+    {
+        Write-Log 'exit: catalog missing or empty'
+        exit 0
+    }
+
+    $config = Read-JsonFile (Join-Path $pluginRoot 'catalog/config.json')
+    $cooldownDays = if ($null -ne $config -and $null -ne $config.cooldownDays) { [int]$config.cooldownDays } else { 2 }
+
+    $shownPath = Join-Path $stateDir 'shown.json'
+    $shown = Read-JsonFile $shownPath
+    $entries = @{}
+    $lastShownAt = $null
+    if ($null -ne $shown)
+    {
+        $lastShownAt = $shown.lastShownAt
+        if ($null -ne $shown.entries)
+        {
+            foreach ($p in $shown.entries.PSObject.Properties) { $entries[$p.Name] = $p.Value }
+        }
+    }
+
+    if (-not $Force -and -not [string]::IsNullOrWhiteSpace($lastShownAt))
+    {
+        $elapsed = (Get-Date).ToUniversalTime() - ([datetime]$lastShownAt).ToUniversalTime()
+        if ($elapsed.TotalDays -lt $cooldownDays)
+        {
+            Write-Log ('exit: cooldown, {0:N2}d elapsed of {1}d' -f $elapsed.TotalDays, $cooldownDays)
+            exit 0
+        }
+    }
+
+    $repoName = Get-RepoName
+    $today = (Get-Date).ToUniversalTime()
+    $candidates = @()
+
+    foreach ($tip in $catalog.tips)
+    {
+        if (-not (Test-RepoMatch $tip $repoName)) { continue }
+        if ($tip.expires -and ([datetime]$tip.expires) -lt $today) { continue }
+        if (Test-AlreadyUsed $tip $stateDir) { continue }
+
+        $count = 0
+        $last = [datetime]::MinValue
+        if ($entries.ContainsKey($tip.id))
+        {
+            $count = [int]$entries[$tip.id].count
+            if ($entries[$tip.id].last) { $last = [datetime]$entries[$tip.id].last }
+        }
+
+        $maxShows = if ($null -ne $tip.maxShows) { [int]$tip.maxShows } else { 3 }
+        if ($count -ge $maxShows) { continue }
+
+        $candidates += [pscustomobject]@{ Tip = $tip; Count = $count; Last = $last }
+    }
+
+    if ($candidates.Count -eq 0)
+    {
+        Write-Log ("exit: no candidates | repo={0} | catalog={1} tips" -f $repoName, $catalog.tips.Count)
+        exit 0
+    }
+
+    $pick = ($candidates | Sort-Object Count, Last | Select-Object -First 1)
+    $tip = $pick.Tip
+    $installState = Get-InstallState $tip
+    Write-Log ("picked={0} | repo={1} | candidates={2} | shownBefore={3} | install={4}" -f
+        $tip.id, $repoName, $candidates.Count, $pick.Count, $installState)
+
+    $userMessage = (New-TipText $tip $installState) + "`n`n" + (New-Question $tip $installState)
+    $actionHint = New-ActionHint $tip $installState
+
+    if ($DryRun)
+    {
+        Write-Host "repo=$repoName  picked=$($tip.id)  install=$installState  stateDir=$stateDir"
+        Write-Host ''
+        Write-Host $userMessage
+        Write-Log 'exit: dry run, state not written'
+        exit 0
+    }
+
+    Write-HookOutput 'SessionStart' $userMessage 'Tip pre používateľa.' $actionHint
+
+    $nowIso = $today.ToString('o')
+    $entries[$tip.id] = [pscustomobject]@{ count = $pick.Count + 1; last = $nowIso }
+    Write-JsonFile $shownPath ([pscustomobject]@{
+        lastShownAt     = $nowIso
+        lastCandidateAt = if ($null -ne $shown) { $shown.lastCandidateAt } else { $null }
+        entries         = [pscustomobject]$entries
+    })
+
+    $channel = if (Test-IsDesktop) { 'additionalContext (desktop)' } else { 'systemMessage + additionalContext (cli)' }
+    Write-Log ("emitted {0} | shownNow={1} | state written" -f $channel, ($pick.Count + 1))
+}
+catch
+{
+    Write-Log ("ERROR: {0} | at {1}:{2}" -f
+        $_.Exception.Message, $_.InvocationInfo.ScriptName, $_.InvocationInfo.ScriptLineNumber)
+    exit 0
+}
+
+exit 0
