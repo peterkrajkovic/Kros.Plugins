@@ -39,6 +39,24 @@ function Get-TipCatalog([string]$StateDir, [string]$PluginRoot, [string]$Plugins
     $config = Read-JsonFile (Join-Path $PluginRoot 'catalog/config.json')
     if ($null -eq $config) { $config = [pscustomobject]@{} }
 
+    # Fetched policy overrides the packaged bootstrap, field by field. No value read from the
+    # snapshot is bounded or second-guessed - see D8 in the analysis.
+    $snapshot = Read-JsonFile (Join-Path $StateDir 'remote-tips.json')
+    if ($null -ne $snapshot -and $null -ne $snapshot.config)
+    {
+        foreach ($p in $snapshot.config.PSObject.Properties)
+        {
+            $config | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value -Force
+        }
+    }
+
+    if ($null -ne $config.enabled -and -not $config.enabled)
+    {
+        return [pscustomobject]@{ tips = @(); config = $config }
+    }
+
+    if ($null -ne $snapshot -and $null -ne $snapshot.tips) { $tips = @($tips) + @($snapshot.tips) }
+
     # Repository tips count as authored: they win over discovered copy for the same id.
     $tips = @($tips) + @(Get-RepoTips -RepoRoot $RepoRoot)
 

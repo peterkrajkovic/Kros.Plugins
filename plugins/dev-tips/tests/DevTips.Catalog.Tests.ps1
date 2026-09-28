@@ -47,3 +47,37 @@ Describe 'Merge-Tips' {
         ($merged | Where-Object id -eq 'teapie').body | Should -Be 'generated'
     }
 }
+
+Describe 'Get-TipCatalog with a remote snapshot' {
+    It 'prefers remote config over the packaged one, unclamped' {
+        $pluginRoot = New-FakePluginRoot -Tips @{ id = 'alpha'; title = 'A'; body = 'b'; repos = @('*') } `
+                                        -Config @{ cooldownDays = 2; ttlHours = 24 }
+        $stateDir = New-TempDir
+        ([pscustomobject]@{
+            fetchedAt = (Get-Date).ToUniversalTime().ToString('o')
+            config    = [pscustomobject]@{ cooldownDays = 0; ttlHours = 1; enabled = $true }
+            tips      = @([pscustomobject]@{ id = 'remote-one'; title = 'R'; body = 'b'; repos = @('*') })
+        }) | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $stateDir 'remote-tips.json') -Encoding UTF8
+
+        $result = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot `
+                                 -PluginsRoot (New-TempDir) -RepoRoot (New-TempDir)
+
+        $result.config.cooldownDays | Should -Be 0 -Because 'fetched values are used as given, never clamped'
+        ($result.tips | Where-Object id -eq 'remote-one') | Should -Not -BeNullOrEmpty
+    }
+
+    It 'returns no tips at all when the remote config disables the plugin' {
+        $pluginRoot = New-FakePluginRoot -Tips @{ id = 'alpha'; title = 'A'; body = 'b'; repos = @('*') } `
+                                        -Config @{ cooldownDays = 2 }
+        $stateDir = New-TempDir
+        ([pscustomobject]@{
+            config = [pscustomobject]@{ enabled = $false }
+            tips   = @()
+        }) | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $stateDir 'remote-tips.json') -Encoding UTF8
+
+        $result = Get-TipCatalog -StateDir $stateDir -PluginRoot $pluginRoot `
+                                 -PluginsRoot (New-TempDir) -RepoRoot (New-TempDir)
+
+        $result.tips.Count | Should -Be 0
+    }
+}
