@@ -71,7 +71,7 @@ pwsh -NoProfile -Command "Install-Module Pester -MinimumVersion 5.0 -MaximumVers
 Expected: completes without error. Verify with:
 
 ```bash
-pwsh -NoProfile -Command "(Get-Module -ListAvailable Pester | Where-Object Version -ge 5.0 | Select-Object -First 1).Version.ToString()"
+pwsh -NoProfile -Command "(Get-Module -ListAvailable Pester | Where-Object { \/c/Users/krajkovic/Documents/Projects/Kros.Plugins.Version -ge [version]'5.0' } | Select-Object -First 1).Version.ToString()"
 ```
 
 Expected: `5.9.1` or another 5.x version.

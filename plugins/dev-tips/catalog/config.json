@@ -1,4 +1,4 @@
 {
-  "cooldownDays": 0,
-  "candidateCooldownHours": 0
+  "cooldownDays": 2,
+  "candidateCooldownHours": 12
 }
