@@ -15,6 +15,28 @@ function New-FakePluginRoot([hashtable]$Tips, [hashtable]$Config)
     return $root
 }
 
+function New-FixtureOriginRepo
+{
+    # A stand-in for Kros.AiDevTools: a real git repo on disk, no network involved.
+    $repo = New-TempDir
+    $skillDir = Join-Path $repo 'plugins/kros-shared/skills/git-diff'
+    New-Item -ItemType Directory -Path $skillDir -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $repo 'dev-tips') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $repo '.claude-plugin') -Force | Out-Null
+
+    ([pscustomobject]@{ kind = 'command'; title = 'From the source'; body = 'authored'; repos = @('*'); maxShows = 2 }) |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $skillDir 'tip.json') -Encoding UTF8
+    ([pscustomobject]@{ ttlHours = 24; cooldownDays = 2; enabled = $true }) |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $repo 'dev-tips/config.json') -Encoding UTF8
+    ([pscustomobject]@{ name = 'kros-ai-dev-tools' }) |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $repo '.claude-plugin/marketplace.json') -Encoding UTF8
+
+    & git -C $repo init --initial-branch=master --quiet
+    & git -C $repo -c user.email=t@t -c user.name=t add -A
+    & git -C $repo -c user.email=t@t -c user.name=t commit -q -m 'fixture'
+    return $repo
+}
+
 function New-FakePluginsRoot
 {
     # Builds ~/.claude/plugins with one installed plugin carrying one skill.
