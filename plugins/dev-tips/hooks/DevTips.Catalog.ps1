@@ -2,6 +2,7 @@
 # The one place tips come from. Hooks must not read catalog files directly.
 
 . (Join-Path $PSScriptRoot 'DevTips.Discovery.ps1')
+. (Join-Path $PSScriptRoot 'DevTips.RepoTips.ps1')
 
 function Merge-Tips([object[]]$Authored, [object[]]$Discovered)
 {
@@ -14,9 +15,15 @@ function Merge-Tips([object[]]$Authored, [object[]]$Discovered)
     return ,@($byId.Values)
 }
 
-function Get-TipCatalog([string]$StateDir, [string]$PluginRoot, [string]$PluginsRoot)
+function Get-TipCatalog([string]$StateDir, [string]$PluginRoot, [string]$PluginsRoot, [string]$RepoRoot)
 {
     if ([string]::IsNullOrWhiteSpace($PluginRoot)) { $PluginRoot = Get-PluginRoot }
+
+    if ([string]::IsNullOrWhiteSpace($RepoRoot))
+    {
+        $RepoRoot = $env:CLAUDE_PROJECT_DIR
+        if ([string]::IsNullOrWhiteSpace($RepoRoot)) { $RepoRoot = (Get-Location).Path }
+    }
 
     # Injectable so a test never reads the real profile; defaulted so hooks need not know the path.
     if ([string]::IsNullOrWhiteSpace($PluginsRoot))
@@ -31,6 +38,9 @@ function Get-TipCatalog([string]$StateDir, [string]$PluginRoot, [string]$Plugins
 
     $config = Read-JsonFile (Join-Path $PluginRoot 'catalog/config.json')
     if ($null -eq $config) { $config = [pscustomobject]@{} }
+
+    # Repository tips count as authored: they win over discovered copy for the same id.
+    $tips = @($tips) + @(Get-RepoTips -RepoRoot $RepoRoot)
 
     $discovered = @()
     try { $discovered = Get-DiscoveredTips -StateDir $StateDir -PluginsRoot $PluginsRoot } catch { }

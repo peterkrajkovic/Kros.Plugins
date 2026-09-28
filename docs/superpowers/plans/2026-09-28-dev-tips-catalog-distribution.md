@@ -143,7 +143,7 @@ Both hooks read `catalog/tips.json` directly today. Route them through one funct
 
 **Interfaces:**
 - Consumes: `Read-JsonFile`, `Get-PluginRoot` from `DevTips.Common.ps1`.
-- Produces: `Get-TipCatalog([string]$StateDir, [string]$PluginRoot, [string]$PluginsRoot)` returning `[pscustomobject]@{ tips = @(...); config = [pscustomobject] }`. `tips` is an array in the shape the hooks already iterate: objects with `id`, `kind`, `title`, `body`, `ref`, `repos`, `maxShows`, `install`, optional `when`, `expires`, `suppressIfUsed`. `config` carries `cooldownDays`, `candidateCooldownHours`, `ttlHours`, `enabled`.
+- Produces: `Get-TipCatalog([string]$StateDir, [string]$PluginRoot, [string]$PluginsRoot, [string]$RepoRoot)` returning `[pscustomobject]@{ tips = @(...); config = [pscustomobject] }`. `tips` is an array in the shape the hooks already iterate: objects with `id`, `kind`, `title`, `body`, `ref`, `repos`, `maxShows`, `install`, optional `when`, `expires`, `suppressIfUsed`. `config` carries `cooldownDays`, `candidateCooldownHours`, `ttlHours`, `enabled`.
 
 - [ ] **Step 1: Write the fixture helper**
 
@@ -1146,9 +1146,8 @@ Expected: PASS, 3 tests.
 Dot-source `DevTips.RepoTips.ps1` at the top of `DevTips.Catalog.ps1`, then fold repository tips into the authored set, which is the set that wins over discovery:
 
 ```powershell
-    $repoRoot = $env:CLAUDE_PROJECT_DIR
-    if ([string]::IsNullOrWhiteSpace($repoRoot)) { $repoRoot = (Get-Location).Path }
-    $tips = @($tips) + @(Get-RepoTips -RepoRoot $repoRoot)
+    # Repository tips count as authored: they win over discovered copy for the same id.
+    $tips = @($tips) + @(Get-RepoTips -RepoRoot $RepoRoot)
 ```
 
 Place this before the `Merge-Tips` call.
