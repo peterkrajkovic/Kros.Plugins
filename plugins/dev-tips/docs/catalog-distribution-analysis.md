@@ -51,6 +51,7 @@ ktoré práve pribudli, je oboje naopak.
 | 2 | Kanál B — `.dev-tips/` v produktových repách | ADR a konvencie per repo | nič |
 | 3 | Kanál C — CI, fetch na pozadí | tipy na nástroje, ktoré vývojár nemá | prístup k CI v `Kros.AiDevTools` |
 | 4 | Koniec ručného editovania `catalog/tips.json` | jediný zdroj pravdy | etapy 1–3 |
+| 5 | **Návrh (D13)** — oznámenia o nových ADR ako druhá dráha | nové ADR dobehnú každého raz | etapy 1–3, rozhodnutie o D13 |
 
 Poradie je podľa hodnoty na jednotku rizika. Kanál A nepotrebuje CI, sieť ani druhé repo a pokrýva
 najväčšiu časť toho, čo by sa inak muselo písať ručne. Kanál C je posledný, lebo je jediný, ktorý
@@ -231,6 +232,43 @@ cez `discoverMarketplaces` v stiahnutej konfigurácii.
 
 **Prijatý dôsledok:** ak sa nájde cudzí nástroj, ktorý stále za propagáciu, treba ho do zoznamu
 pridat vedome — alebo mu napísať vlastný `tip.json` a nespoliehať sa na jeho `description`.
+
+### D13 — Nové ADR ako oznámenia, nie ako tipy
+
+**Status: návrh, nerozhodnuté.** Na rozdiel od D1 až D12 to nie je prijaté rozhodnutie. Zapísané je
+preto, aby sa nestratilo, a preto, že mení jednu z úvah v D3.
+
+**Návrh:** nové prijaté ADR z `Kros-sk/Kros.ADR` doručovať **druhou dráhou** s vlastným rozpočtom —
+titulok a odkaz, automaticky, práve raz na vývojára.
+
+**Prečo nie tou istou dráhou ako tipy.** Tip a oznámenie o ADR majú opačnú ekonomiku. Tip hovorí
+*keď budeš mať čas, toto existuje*: je preskočiteľný navždy, načasovanie nehrá rolu a platí naň
+limit jeden za cooldown. Nové prijaté ADR hovorí *odteraz to platí*: týka sa kódu, ktorý niekto
+napíše zajtra, a musí dobehnúť raz. Ak pôjdu jednou rúrou, oznámenia zjedia rozpočet tipov a ADR
+zároveň čaká v poradí, kým naň príde rad. Prehrajú obe.
+
+**Prečo oznámenie nepotrebuje ručne písaný text.** Titulok z frontmatteru a odkaz stačia. Tým padá
+výhrada z D3, kvôli ktorej pri ADR trváme na opt-in poli `tip:` — to zostáva pre druhú rolu,
+**opakované** pripomenutie ADR, ktoré ľudia porušujú. Oznámenie je jednorazové a ide samo.
+
+**Spúšťačom musí byť lokálny stav, nie dátum v ADR.** `accept-draft.ps1` prepisuje `📝 Draft` na
+`✅ Accepted` a pole `date` nechá tak, takže dátum vo frontmatteri je dátum vzniku, nie prijatia. A
+klient fetchuje `--depth 1`, čiže ten prechod nikdy neuvidí. *Nový* preto znamená **prvý raz, čo
+tento stroj vidí dané ADR so statusom Accepted** — čo je `firstSeen` z D9 a nepotrebuje históriu.
+
+**Čo to zabije, ak sa to zanedbá.** Pri prvej inštalácii vidí klient všetkých 22 prijatých ADR ako
+nevidené. Bez poistky pošle 22 oznámení a plugin si každý vypne v prvej minúte. Prvý beh preto musí
+stav **len naočkovať** — zapísať existujúce ADR ako videné, bez oznámenia — a oznamovať len to, čo
+pribudne potom. To isté platí pre niekoho po mesiaci dovolenky: dohnať treba, ale po jednom za
+session, od najstaršieho.
+
+**Lacnejšia alternatíva, ktorú treba zvážiť skôr.** Ak je cieľ len *nech sa o novom ADR dozvedia
+všetci*, webhook z GitHubu do Teams kanála je zlomok tejto mašinérie a dorazí aj k ľuďom, ktorí ten
+týždeň Claude Code neotvoria. Nie sú to konkurenti: webhook na povedomie, plugin na moment práce.
+Keby sa malo vybrať len jedno, webhook je lacnejší a spoľahlivejší.
+
+**Nezačínať pred** dokončením etáp 1 až 3. Pridávať štvrtý kanál do práce, ktorá ešte nedosedla, je
+stavanie druhého podlažia na nedokončenom prvom.
 
 ## Riziká
 
