@@ -46,6 +46,46 @@ Describe 'Merge-Tips' {
         @($merged).Count | Should -Be 2
         ($merged | Where-Object id -eq 'teapie').body | Should -Be 'generated'
     }
+
+    It 'puts authored tips ahead of discovered ones' {
+        $discovered = @(
+            [pscustomobject]@{ id = 'alpha'; title = 'a'; body = 'b'; source = 'discovered' }
+            [pscustomobject]@{ id = 'beta';  title = 'b'; body = 'b'; source = 'discovered' }
+        )
+        $authored = @([pscustomobject]@{ id = 'gamma'; title = 'g'; body = 'b'; source = 'repo' })
+
+        $merged = Merge-Tips -Authored $authored -Discovered $discovered
+
+        $merged[0].id | Should -Be 'gamma' -Because 'somebody wrote that one on purpose'
+    }
+
+    It 'keeps an overriding authored tip in the authored position, not the discovered one' {
+        $discovered = @(
+            [pscustomobject]@{ id = 'alpha'; title = 'a'; body = 'generated'; source = 'discovered' }
+            [pscustomobject]@{ id = 'beta';  title = 'b'; body = 'generated'; source = 'discovered' }
+        )
+        $authored = @([pscustomobject]@{ id = 'beta'; title = 'B'; body = 'written'; source = 'repo' })
+
+        $merged = Merge-Tips -Authored $authored -Discovered $discovered
+
+        $merged[0].id | Should -Be 'beta'
+        $merged[0].body | Should -Be 'written'
+        @($merged).Count | Should -Be 2
+    }
+}
+
+Describe 'Get-SourceRank' {
+    It 'ranks every authored source ahead of a discovered one' {
+        foreach ($s in @('repo', 'remote', 'packaged')) {
+            Get-SourceRank ([pscustomobject]@{ source = $s }) |
+                Should -BeLessThan (Get-SourceRank ([pscustomobject]@{ source = 'discovered' }))
+        }
+    }
+
+    It 'treats a tip with no source as authored, because the packaged catalog has none' {
+        Get-SourceRank ([pscustomobject]@{ id = 'x' }) |
+            Should -BeLessThan (Get-SourceRank ([pscustomobject]@{ source = 'discovered' }))
+    }
 }
 
 Describe 'Get-TipCatalog with a remote snapshot' {

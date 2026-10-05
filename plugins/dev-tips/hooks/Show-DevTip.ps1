@@ -88,7 +88,11 @@ try
         exit 0
     }
 
-    $pick = ($candidates | Sort-Object Count, Last | Select-Object -First 1)
+    # Rank is explicit rather than relying on Sort-Object being stable and Merge-Tips emitting
+    # authored tips first. Both are true, and neither should be load-bearing from here.
+    $pick = ($candidates |
+        Sort-Object Count, @{ Expression = { Get-SourceRank $_.Tip } }, Last |
+        Select-Object -First 1)
     $tip = $pick.Tip
     $installState = Get-InstallState $tip
     $source = if ($tip.source) { $tip.source } else { 'packaged' }

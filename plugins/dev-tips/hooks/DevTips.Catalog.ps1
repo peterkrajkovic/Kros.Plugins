@@ -4,11 +4,25 @@
 . (Join-Path $PSScriptRoot 'DevTips.Discovery.ps1')
 . (Join-Path $PSScriptRoot 'DevTips.RepoTips.ps1')
 
+# Authored copy beats generated copy. Discovery exists so the plugin works before anyone writes
+# anything; once somebody has written a tip, theirs is the better text and goes first.
+function Get-SourceRank($Tip)
+{
+    if ($Tip.source -eq 'discovered') { return 1 }
+    return 0
+}
+
 function Merge-Tips([object[]]$Authored, [object[]]$Discovered)
 {
+    # Authored first, so an authored tip keeps an authored tip's position. Assigning an existing key
+    # in an ordered dictionary keeps the ORIGINAL slot, so inserting discovered first would have left
+    # every overriding tip sitting in the discovered half of the list.
     $byId = [ordered]@{}
-    foreach ($tip in @($Discovered)) { if ($null -ne $tip) { $byId[$tip.id] = $tip } }
     foreach ($tip in @($Authored)) { if ($null -ne $tip) { $byId[$tip.id] = $tip } }
+    foreach ($tip in @($Discovered))
+    {
+        if ($null -ne $tip -and -not $byId.Contains($tip.id)) { $byId[$tip.id] = $tip }
+    }
 
     # The comma is load-bearing: returning @() unrolls to nothing, and the caller's property
     # becomes $null instead of an empty array.
