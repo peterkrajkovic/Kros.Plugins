@@ -6,6 +6,10 @@
 [CmdletBinding()]
 param([Parameter(Mandatory = $true)][string]$RepoRoot)
 
+# CI passes '.', and the paths in every message are built by stripping this prefix off an absolute
+# FullName. Without resolving it first, '.' is one character long and the strip eats the drive letter.
+$RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path.TrimEnd('\', '/')
+
 $problems = @()
 $ids = @{}
 $maxTitle = 80
