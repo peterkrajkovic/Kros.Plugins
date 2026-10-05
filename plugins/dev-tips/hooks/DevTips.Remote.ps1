@@ -52,14 +52,27 @@ function ConvertTo-Tip([string]$Path, $Json, $Marketplace)
     $parts = $Path -split '/'
     $plugin = if ($parts.Length -gt 1 -and $parts[0] -eq 'plugins') { $parts[1] } else { $null }
 
+    # A skill is a directory with tip.json inside; everything else - commands, agents - is a
+    # <name>.tip.json beside the file it describes. The second pattern has to stay generic, or a new
+    # kind of folder silently yields an id with ".tip" still on the end.
     $name = if ($Path -match 'skills/([^/]+)/tip\.json$') { $Matches[1] }
-            elseif ($Path -match 'commands/([^/]+)\.tip\.json$') { $Matches[1] }
-            else { [System.IO.Path]::GetFileNameWithoutExtension($Path) }
+            elseif ($Path -match '(?:^|/)([^/]+)\.tip\.json$') { $Matches[1] }
+            else { [System.IO.Path]::GetFileNameWithoutExtension($Path) -replace '\.tip$', '' }
 
     $tip = $Json | Select-Object *
     $tip | Add-Member -NotePropertyName id -NotePropertyValue $name -Force
-    $tip | Add-Member -NotePropertyName ref -NotePropertyValue "/$name" -Force
+    # An agent is named, not invoked with a slash. Advertising "/qa-branch-tester" would tell people
+    # to type a command that does not exist.
+    $invocation = if ($Json.kind -eq 'agent') { $name } else { "/$name" }
+    $tip | Add-Member -NotePropertyName ref -NotePropertyValue $invocation -Force
     $tip | Add-Member -NotePropertyName source -NotePropertyValue 'remote' -Force
+
+    # Derived, not authored: a tip whose author forgot this would keep being offered to somebody who
+    # already uses the tool, which is the one failure this plugin cannot afford.
+    if ([string]::IsNullOrWhiteSpace($tip.suppressIfUsed))
+    {
+        $tip | Add-Member -NotePropertyName suppressIfUsed -NotePropertyValue $name -Force
+    }
     if ($plugin)
     {
         $tip | Add-Member -NotePropertyName install `

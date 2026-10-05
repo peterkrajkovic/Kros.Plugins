@@ -34,7 +34,29 @@ Describe 'Get-RemoteTipFiles and ConvertTo-Tip' {
         $tip.install.plugin | Should -Be 'kros-shared'
         $tip.install.marketplace | Should -Be 'kros-ai-dev-tools'
         $tip.title | Should -Be 'From the source'
+        $tip.suppressIfUsed | Should -Be 'git-diff' -Because 'a migrated tip must not lose its suppression'
         $tip.PSObject.Properties.Name | Should -Not -Contain 'published'
+    }
+}
+
+Describe 'ConvertTo-Tip for things that are not skills' {
+    It 'names a command tip from the file, not the directory' {
+        $tip = ConvertTo-Tip -Path 'plugins/kros-ssw/commands/commit.tip.json' `
+                             -Json ([pscustomobject]@{ kind = 'command'; title = 't'; body = 'b' }) `
+                             -Marketplace 'kros-ai-dev-tools'
+
+        $tip.id | Should -Be 'commit'
+        $tip.ref | Should -Be '/commit'
+    }
+
+    It 'strips .tip from an agent file name and does not advertise it as a command' {
+        $tip = ConvertTo-Tip -Path 'plugins/kros-shared/agents/qa-branch-tester.tip.json' `
+                             -Json ([pscustomobject]@{ kind = 'agent'; title = 't'; body = 'b' }) `
+                             -Marketplace 'kros-ai-dev-tools'
+
+        $tip.id | Should -Be 'qa-branch-tester'
+        $tip.suppressIfUsed | Should -Be 'qa-branch-tester'
+        $tip.ref | Should -Be 'qa-branch-tester' -Because 'an agent is not invoked with a slash'
     }
 }
 
