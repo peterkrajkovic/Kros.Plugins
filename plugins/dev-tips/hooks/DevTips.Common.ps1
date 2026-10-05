@@ -120,6 +120,10 @@ function New-TipText($Tip, [string]$InstallState)
         'installed' { if ($Tip.ref) { $lines += "Spúšťa sa cez ``$($Tip.ref)``." } }
         'marketplace-only' { $lines += "Nemáš ho nainštalovaný: ``/plugin install $($Tip.install.plugin)@$($Tip.install.marketplace)``" }
         'missing' { $lines += "Nemáš ani ten marketplace: ``/plugin marketplace add $($Tip.install.repo)``, potom ``/plugin install $($Tip.install.plugin)@$($Tip.install.marketplace)``" }
+
+        # A rule, an ADR or a convention has nothing to install and nothing to run. Its ref is where
+        # to read it, and without this branch it was silently dropped.
+        default { if ($Tip.ref) { $lines += "Celé znenie: ``$($Tip.ref)``" } }
     }
     return ($lines -join "`n")
 }
