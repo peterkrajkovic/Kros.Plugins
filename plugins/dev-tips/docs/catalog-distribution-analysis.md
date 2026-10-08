@@ -340,6 +340,31 @@ napísaná ako vlastnosť. Agregácia naprieč tímom ju ruší, a dá sa to dvo
 sú jednoznačné; chýba len rozhodnutie, či a ako opustia stroj. To rozhodnutie je o dôvere, nie o
 technike, a nepatrí do kódu.
 
+### D16 — Pás je zdieľané miesto; kto ho vezme, musí skladať
+
+**Zvolené:** `dev-tips` volá `next(e)` vždy, keď nemá čo kresliť, a vlastný strom vracia len
+vtedy, keď tip má. Oprava kolízie patrí do pluginu, ktorý to miesto zaberie — nie do toho, ktorý
+je pod ním.
+
+**Prečo to vzniklo.** Nad promptom je **jedno miesto a viac záujemcov**. Hook, ktorý vráti vlastný
+strom a `next(e)` nezavolá, skryje všetko pod sebou — a urobí to **ticho**: žiadna chyba, žiadny
+riadok v logu, nikto sa o tom nedozvie. `pr-watch` to robil práve takto a `dev-tips` tým zmizol
+úplne okrem tých chvíľ, keď mal `pr-watch` otvorený vlastný panel a preto sa uhol.
+
+**Oprava v `pr-watch`:** najprv `const beneath = await next(e)`, potom svoj riadok **nad** to, čo
+prišlo zdola, namiesto **namiesto** neho. Test `a band beneath this one is drawn too, not replaced`
+to drží na oboch povrchoch; bez neho by to niekto nevedomky vrátil, lebo pôvodný tvar vyzerá
+nevinne.
+
+**Prijatý dôsledok:** `dev-tips` sa dá stále prekryť akýmkoľvek ďalším pluginom, ktorý neskladá.
+Zvnútra sa to zariadiť nedá — kto nevolá `next(e)`, tomu sa niet ako uhnúť. A keďže zlyhanie je
+tiché, prejaví sa ako *„plugin nič nerobí“*, nie ako chyba. Ak sa to zopakuje, hľadať najskôr tu.
+
+**Pri tom sa opravilo aj tvrdenie o balení.** Chvíľu to vyzeralo, že `modules` vedľa klasických
+`hooks` v jednom `hooks.json` sa za behu nenačítajú, a smerovalo to k rozdeleniu na dva pluginy.
+Nie je to pravda: modul sa načítaval celý čas, len sa nedostal ku kresleniu. **Jeden plugin stačí**
+— potvrdené behom, nie validátorom, ktorý o klasických hookoch nehovorí nič.
+
 ## Riziká
 
 | Riziko | Závažnosť | Odpoveď |
@@ -351,6 +376,7 @@ technike, a nepatrí do kódu.
 | Na desktope ide tip cez model, ktorý ho môže preformulovať | nízka | zdokumentované v `desktop-systemmessage-not-rendered.md`, issue nahlásené |
 | Odpojený fetch zamrzne na výzve na credentials | nízka | promptovanie vypnuté, tvrdý timeout, lock so stale timeoutom |
 | Vydanie Claude Code zmení vykresľovanie alebo vstup pásu | stredná | klasický hook ako únik (D14); pozorované už medzi 2.1.284 a nasledujúcim buildom |
+| Iný plugin vezme pás a nezavolá `next(e)` | stredná | zvnútra sa brániť nedá (D16); zlyhanie je tiché, takže pri *„nerobí nič“* hľadať najskôr tu |
 
 ## Otvorené otázky
 

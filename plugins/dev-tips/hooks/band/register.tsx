@@ -36,14 +36,31 @@ type Pending = {
  * installed us, which a module has no way to learn. So both sides spell a fixed path, and
  * the session id keys it so two sessions starting together do not read each other's tip.
  */
-async function readPending($: Parameters<Parameters<Register>[0]>[2] extends never ? never : any, id: string) {
+async function readPending($: any, id: string | null) {
   const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
   if (!home) return null
 
-  try {
-    const text = await $.fs.read(`${home}/.claude/plugins/data/dev-tips-shared/pending-${id}.json`)
+  const dir = `${home}/.claude/plugins/data/dev-tips-shared`
 
-    return JSON.parse(text) as Pending
+  if (id) {
+    try {
+      return JSON.parse(await $.fs.read(`${dir}/pending-${id}.json`)) as Pending
+    } catch {
+      return null
+    }
+  }
+
+  // No id means this module loaded after the session started - a reload, or the plugin
+  // installed mid-session. Rather than stay blank until tomorrow, take the newest handshake
+  // on the machine: it is a tip meant for this person either way.
+  try {
+    const entries = await $.fs.list(dir)
+    const newest = entries
+      .filter(entry => entry.name.startsWith('pending-'))
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]
+    if (!newest) return null
+
+    return JSON.parse(await $.fs.read(`${dir}/${newest.name}`)) as Pending
   } catch {
     return null
   }
@@ -113,10 +130,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const id = await read($, sessionId)
-    if (!id) return next(e)
-
-    const pending = await readPending($, id)
+    const pending = await readPending($, await read($, sessionId))
     if (pending === null) return next(e)
 
     // Keyed by tip, not a flag: an answer must not silence the tip that comes after it.
