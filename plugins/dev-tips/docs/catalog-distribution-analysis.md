@@ -309,6 +309,37 @@ hook pri jej nájdení mlčí; kde sa mod nenačíta — starý build, vypnuté 
 podpory — značka nie je a tip sa doručí tak ako dnes. Degradácia tým nie je tichá polovičná, ale
 návrat k správaniu, ktoré funguje.
 
+### D15 — Odpovede sa zaznamenávajú lokálne; agregácia je nerozhodnutá
+
+**Zvolené:** každé stlačenie v páse sa zapíše do `answers.log` v dátovom priečinku — čas, `id`
+tipu a jedna z troch odpovedí:
+
+| Odpoveď | Čo hovorí | Čo urobí |
+|---|---|---|
+| `known` | tento nástroj už používam | zapíše sa aj do `usage.json`, tip sa viac neponúkne |
+| `show` | vysvetli mi to | model dostane prompt (D14) |
+| `dropped` | nezaujíma ma to | tip videl a odmietol ho, čo je vlastný signál |
+
+**Prečo na tom záleží.** Otvorená otázka 4 — *ako by sme vôbec zistili, že to funguje* — stála od
+začiatku bez odpovede, lebo odpoveď na tip bola veta, ktorú interpretoval model. Vetu nešlo
+spočítať a `known` nešlo odlíšiť od `dropped`. Stlačenie je jednoznačné, a `known` je navyše viac
+než záznam: je to to isté potlačenie, ktoré D11 dovtedy **odhadoval** z transcriptov. Z odhadu sa
+stalo tvrdenie.
+
+**Zo stroja to ale neodchádza.** To nie je opomenutie, je to dôsledok vety, ktorá je v tomto dizajne
+napísaná ako vlastnosť. Agregácia naprieč tímom ju ruší, a dá sa to dvoma spôsobmi:
+
+- *Opt-in export.* Jeden príkaz vypíše anonymný súhrn, človek ho pošle sám. Nula infraštruktúry a
+  nula tichého zberu, za cenu nízkej návratnosti a vzorky skreslenej smerom k ľuďom, ktorých
+  plugin baví — teda k tým, ktorých odpoveď potrebujeme najmenej.
+- *Centrálny endpoint.* Reálne čísla za cenu súhlasu, prevádzky a dôvery. Pri plugine, ktorý ľuďom
+  hovorí, že niečo robia neefektívne, je tichý zber dát najrýchlejšia cesta k tomu, aby si ho
+  vypli.
+
+**Status agregácie: nerozhodnuté.** Zámerne. Rozdiel oproti stavu pred D14 je, že dáta už existujú a
+sú jednoznačné; chýba len rozhodnutie, či a ako opustia stroj. To rozhodnutie je o dôvere, nie o
+technike, a nepatrí do kódu.
+
 ## Riziká
 
 | Riziko | Závažnosť | Odpoveď |
