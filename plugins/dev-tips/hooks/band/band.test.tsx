@@ -25,8 +25,9 @@ const TIP = {
  * The engine beneath the plugin. Nothing stands under a test's hooks, so every event the
  * plugin hands on has to be answered here or the chain has no bottom.
  */
-const engineBeneath = (on: any) => {
+const engineBeneath = (on: any, options: { quiet?: boolean } = {}) => {
   on('classic.SessionStart', () => ({}))
+  if (!options.quiet) on('prompt.submit', (_$: unknown, e: { text: string }) => ({ text: e.text }))
   on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => {
     const { Box } = $.ui.resolve(e)
 
@@ -41,8 +42,8 @@ const engineBeneath = (on: any) => {
  * answering the engine's own `fs.read` from beneath the plugin - which is also a tighter
  * assertion than a real file: it proves the module asks for the path both sides agreed on.
  */
-const given = async ($: any, on: any, tip: unknown = TIP) => {
-  engineBeneath(on)
+const given = async ($: any, on: any, tip: unknown = TIP, options: { quiet?: boolean } = {}) => {
+  engineBeneath(on, options)
   mock.env(on, { USERPROFILE: HOME })
 
   on('fs.read', ($$: unknown, e: { path: string }) => {
@@ -198,4 +199,37 @@ test('every press is recorded, so the notice can finally be measured', async ($,
   await ui.unmount()
 
   expect(writes[`${TIP.stateDir}/answers.log`]).toMatch(/az-pr show/)
+})
+
+test('"show me how" asks the model, naming the tool', async ($, on) => {
+  const asked: string[] = []
+  on('prompt.submit', (_$: unknown, e: { text: string }) => {
+    asked.push(e.text)
+
+    return { text: e.text }
+  })
+  await given($, on, TIP, { quiet: true })
+
+  const ui = await $.ui.mount({ plugin: 'dev-tips', surface: 'desktop', ...BAND })
+  await ui.press({ key: 'open' })
+  await ui.press({ key: 'show' })
+  await ui.unmount()
+
+  expect(asked.join('\n')).toMatch(/kros-shared:az-pr/)
+})
+
+test('the other answers ask the model nothing', async ($, on) => {
+  const asked: string[] = []
+  on('prompt.submit', (_$: unknown, e: { text: string }) => {
+    asked.push(e.text)
+
+    return { text: e.text }
+  })
+  await given($, on, TIP, { quiet: true })
+
+  const ui = await $.ui.mount({ plugin: 'dev-tips', surface: 'desktop', ...BAND })
+  await ui.press({ key: 'drop' })
+  await ui.unmount()
+
+  expect(asked).toHaveLength(0)
 })

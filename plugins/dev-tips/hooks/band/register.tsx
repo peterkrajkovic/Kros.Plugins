@@ -71,6 +71,17 @@ async function recordAnswer($: any, pending: Pending, answer: Answer) {
 `)
   } catch { /* a notice is never worth an error in front of someone */ }
 
+  if (answer === 'show') {
+    // The same call the engine makes for a typed prompt, so it becomes a turn of its own
+    // once the session is idle. The model reads it as this plugin's, not as the person's.
+    const what = pending.ref ?? pending.title
+    // Caught, not voided: where nothing can take a prompt the press must still be recorded
+    // and the band must stay standing.
+    void $.prompt
+      .submit({ text: `Ukáž mi, ako sa používa ${what}, a na čo je to dobré.` })
+      .catch(() => undefined)
+  }
+
   if (answer !== 'known') return
 
   try {
