@@ -49,6 +49,42 @@ async function readPending($: Parameters<Parameters<Register>[0]>[2] extends nev
   }
 }
 
+/**
+ * Records the press and, for `known`, the suppression itself.
+ *
+ * `usage.json` is the file Test-AlreadyUsed reads, so pressing "already use it" writes the
+ * same signal Record-SkillUse.ps1 writes live and the transcript scan infers. That is the
+ * point of the band: the inference becomes a statement.
+ *
+ * `$.fs` has no move, so these are written in place rather than temp-plus-move as the
+ * PowerShell does. The window is small and both files are small; a torn read leaves
+ * Read-JsonFile with null, which Test-AlreadyUsed reads as "not used" - the tip is offered
+ * once more, which is the harmless direction to fail in.
+ */
+async function recordAnswer($: any, pending: Pending, answer: Answer) {
+  const at = new Date().toISOString()
+
+  try {
+    let log = ''
+    try { log = await $.fs.read(`${pending.stateDir}/answers.log`) } catch { log = '' }
+    await $.fs.write(`${pending.stateDir}/answers.log`, `${log}${at} ${pending.id} ${answer}
+`)
+  } catch { /* a notice is never worth an error in front of someone */ }
+
+  if (answer !== 'known') return
+
+  try {
+    let usage: Record<string, string> = {}
+    try { usage = JSON.parse(await $.fs.read(`${pending.stateDir}/usage.json`)) } catch { usage = {} }
+
+    // A live record wins, as Merge-UsageFile has it: write only what is absent.
+    if (usage[pending.id] === undefined) {
+      usage[pending.id] = at
+      await $.fs.write(`${pending.stateDir}/usage.json`, JSON.stringify(usage, null, 2))
+    }
+  } catch { /* as above */ }
+}
+
 export const register: Register = on => {
   on('classic.SessionStart', async ($, e, next) => {
     // The same payload the PowerShell hook reads, so both name the handshake file alike.
@@ -77,7 +113,10 @@ export const register: Register = on => {
 
     const open = await read($, isOpen)
     const { Box, Button, Link, Text } = $.ui.resolve(e)
-    const choose = (value: Answer) => update($, answeredId, () => pending.id)
+    const choose = async (value: Answer) => {
+      await update($, answeredId, () => pending.id)
+      await recordAnswer($, pending, value)
+    }
 
     return (
       <Box flexDirection="column">

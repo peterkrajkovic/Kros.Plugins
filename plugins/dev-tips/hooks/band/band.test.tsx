@@ -6,8 +6,9 @@ const SESSION = 'session-1'
 const SHARED = `${HOME}/.claude/plugins/data/dev-tips-shared`
 
 /** The engine normalises a path to the platform's separator before the event carries it. */
-const isPending = (path: string) =>
-  path.split('\\').join('/') === `${SHARED}/pending-${SESSION}.json`
+const normalise = (path: string) => path.split('\\').join('/')
+
+const isPending = (path: string) => normalise(path) === `${SHARED}/pending-${SESSION}.json`
 
 const TIP = {
   id: 'az-pr',
@@ -148,4 +149,53 @@ test('the focus hint shows on a terminal and nowhere else', async ($, on) => {
   const desk = await $.ui.mount({ plugin: 'dev-tips', surface: 'desktop', ...BAND })
   expect(await desk.find({ type: 'Text', text: /tab aktivuje/ })).toBeUndefined()
   await desk.unmount()
+})
+
+/** Collects what the plugin writes, keyed by a path normalised like the engine's. */
+const writesOf = (on: any) => {
+  const writes: Record<string, string> = {}
+  on('fs.write', (_$: unknown, e: { path: string; text: string }) => {
+    writes[normalise(e.path)] = e.text
+
+    return { value: undefined }
+  })
+
+  return writes
+}
+
+test('"already use it" writes the suppression the PowerShell reads', async ($, on) => {
+  const writes = writesOf(on)
+  await given($, on)
+
+  const ui = await $.ui.mount({ plugin: 'dev-tips', surface: 'desktop', ...BAND })
+  await ui.press({ key: 'open' })
+  await ui.press({ key: 'known' })
+  await ui.unmount()
+
+  const usage = JSON.parse(writes[`${TIP.stateDir}/usage.json`])
+  expect(usage['az-pr']).toBeDefined()
+})
+
+test('dropping records the press but suppresses nothing', async ($, on) => {
+  const writes = writesOf(on)
+  await given($, on)
+
+  const ui = await $.ui.mount({ plugin: 'dev-tips', surface: 'desktop', ...BAND })
+  await ui.press({ key: 'drop' })
+  await ui.unmount()
+
+  expect(writes[`${TIP.stateDir}/usage.json`]).toBeUndefined()
+  expect(writes[`${TIP.stateDir}/answers.log`]).toMatch(/az-pr dropped/)
+})
+
+test('every press is recorded, so the notice can finally be measured', async ($, on) => {
+  const writes = writesOf(on)
+  await given($, on)
+
+  const ui = await $.ui.mount({ plugin: 'dev-tips', surface: 'desktop', ...BAND })
+  await ui.press({ key: 'open' })
+  await ui.press({ key: 'show' })
+  await ui.unmount()
+
+  expect(writes[`${TIP.stateDir}/answers.log`]).toMatch(/az-pr show/)
 })

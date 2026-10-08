@@ -88,3 +88,28 @@ Describe 'Write-PendingTip' {
         @(Get-ChildItem -LiteralPath $shared -Filter '*.tmp').Count | Should -Be 0
     }
 }
+
+Describe 'Write-PendingTip housekeeping' {
+    It 'sweeps what earlier sessions left behind' {
+        $shared = New-TempDir
+        $old = Join-Path $shared 'pending-long-gone.json'
+        '{}' | Set-Content -LiteralPath $old -Encoding UTF8
+        (Get-Item -LiteralPath $old).LastWriteTimeUtc = (Get-Date).ToUniversalTime().AddDays(-30)
+
+        Write-PendingTip -SharedDir $shared -StateDir (New-TempDir) -SessionId 'fresh' -InstallState 'n/a' `
+            -Tip ([pscustomobject]@{ id = 'x'; title = 't'; body = 'b' })
+
+        Test-Path -LiteralPath $old | Should -BeFalse
+        Test-Path -LiteralPath (Join-Path $shared 'pending-fresh.json') | Should -BeTrue
+    }
+
+    It 'leaves a recent one alone, because another session may still be drawing it' {
+        $shared = New-TempDir
+        '{}' | Set-Content -LiteralPath (Join-Path $shared 'pending-other.json') -Encoding UTF8
+
+        Write-PendingTip -SharedDir $shared -StateDir (New-TempDir) -SessionId 'mine' -InstallState 'n/a' `
+            -Tip ([pscustomobject]@{ id = 'x'; title = 't'; body = 'b' })
+
+        Test-Path -LiteralPath (Join-Path $shared 'pending-other.json') | Should -BeTrue
+    }
+}

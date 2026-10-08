@@ -42,6 +42,16 @@ function Write-PendingTip([string]$SharedDir, [string]$StateDir, [string]$Sessio
         pickedAt     = (Get-Date).ToUniversalTime().ToString('o')
     }
 
+    # One file per session means one file left behind per session. Nothing else would ever
+    # remove them, so each write sweeps what the sessions before it left.
+    foreach ($stale in Get-ChildItem -LiteralPath $SharedDir -Filter 'pending-*.json' -File -ErrorAction SilentlyContinue)
+    {
+        if ($stale.LastWriteTimeUtc -lt (Get-Date).ToUniversalTime().AddDays(-7))
+        {
+            Remove-Item -LiteralPath $stale.FullName -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     # Temp plus move: the band may be reading this while SessionStart is still writing it.
     $final = Join-Path $SharedDir ("pending-$SessionId.json")
     $temp = "$final.$PID.tmp"
