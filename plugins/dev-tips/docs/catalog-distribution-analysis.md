@@ -270,6 +270,45 @@ Keby sa malo vybrať len jedno, webhook je lacnejší a spoľahlivejší.
 **Nezačínať pred** dokončením etáp 1 až 3. Pridávať štvrtý kanál do práce, ktorá ešte nedosedla, je
 stavanie druhého podlažia na nedokončenom prvom.
 
+### D14 — Tipy kreslí mod, nie `systemMessage`
+
+**Zvolené:** oznámenie vykreslí **pás nad promptom** (`ui.render` na `AbovePrompt`) z modu —
+pluginu funkčných hookov. Výber tipu zostáva v PowerShelli; mod je len zobrazovadlo a vstup.
+
+**Voči:**
+- *`systemMessage` z `SessionStart` hooku.* Jediný deterministický kanál k človeku, a na desktope
+  ho appka zahodí (#75534). Dnešná obchádzka — poslať text modelu v `additionalContext` s pokynom
+  vypísať ho doslova — doručí tip o turn neskôr a robí z neho odporúčanie: model ho môže
+  preformulovať, zahodiť alebo podľa neho začať konať.
+- *Toastu.* `$.ui.toast` je jeden riadok na štyri sekundy; jediná voľba je `timeoutMs`. Na oznámenie
+  s telom a otázkou je to zlá nádoba.
+- *Panelu (`Pane`).* Na jeden tip neprimerane veľké, a otvorený nevyžiadane sa usadí až od 144
+  stĺpcov.
+
+**Čo tým pribudlo nad rámec opravy rozbitého kanála.** Pás vie **prijať odpoveď**. Otázka tipu
+prestáva byť vetou, na ktorú človek odpovedá prózou a model ju interpretuje, a stáva sa tlačidlami:
+*Ukáž ako*, *Už to používam*, zahodenie. Stlačenie je jednoznačné a **spočítateľné** — čo je prvá
+reálna odpoveď na otvorenú otázku 4, teda ako by sme vôbec zistili, že plugin funguje. `systemMessage`
+toto nevedel nikdy, takže mod nie je len náhradou za rozbitú cestu.
+
+**Overené sondou**, nie úvahou: pás sa vykreslí na desktope aj v termináli, `Link` s `href` funguje na
+oboch, a strom je platný pod pravidlami oboch povrchov.
+
+**Prijatá cena, a tá je vyššia, než sa zdalo.** API je označené *early access* a mení sa medzi
+vydaniami bez varovania. Pri sonde sa to prejavilo dvakrát za jedno popoludnie:
+
+- na builde 2.1.284 kreslil terminál pás tak, že znaky z tela textu pretlačili riadok s titulkom
+  (`WebApplicationBuilder` vyšlo ako `WebApplicationBuglder`); o build neskôr bolo rovnaké správne,
+- v tom istom kroku sa zmenila práca s fokusom: predtým sa na tlačidlo dalo kliknúť priamo, potom až
+  po `tab`.
+
+Ani jedna z tých zmien nebola v našom kóde. To je údržba, ktorú si beriem na seba vedome.
+
+**Preto musí ostať únik.** Klasický `SessionStart` hook sa neruší. Mod po načítaní zapíše značku a
+hook pri jej nájdení mlčí; kde sa mod nenačíta — starý build, vypnuté hot reloading, prostredie bez
+podpory — značka nie je a tip sa doručí tak ako dnes. Degradácia tým nie je tichá polovičná, ale
+návrat k správaniu, ktoré funguje.
+
 ## Riziká
 
 | Riziko | Závažnosť | Odpoveď |
@@ -280,6 +319,7 @@ stavanie druhého podlažia na nedokončenom prvom.
 | Retrospektívne oznámenia vyskočia na falošnú zhodu | stredná | formulácia zostáva *nabudúce môžeš*, nikdy *mal si* |
 | Na desktope ide tip cez model, ktorý ho môže preformulovať | nízka | zdokumentované v `desktop-systemmessage-not-rendered.md`, issue nahlásené |
 | Odpojený fetch zamrzne na výzve na credentials | nízka | promptovanie vypnuté, tvrdý timeout, lock so stale timeoutom |
+| Vydanie Claude Code zmení vykresľovanie alebo vstup pásu | stredná | klasický hook ako únik (D14); pozorované už medzi 2.1.284 a nasledujúcim buildom |
 
 ## Otvorené otázky
 
