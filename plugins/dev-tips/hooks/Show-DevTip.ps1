@@ -10,6 +10,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Only when stdin is redirected: a hook always has it, a manual run does not, and reading
+# an interactive stdin would hang waiting for input that never comes.
+$payload = $null
+if ([Console]::IsInputRedirected)
+{
+    try { $payload = [Console]::In.ReadToEnd() | ConvertFrom-Json } catch { $payload = $null }
+}
+
 . (Join-Path $PSScriptRoot 'DevTips.Common.ps1')
 . (Join-Path $PSScriptRoot 'DevTips.Catalog.ps1')
 . (Join-Path $PSScriptRoot 'Write-PendingTip.ps1')
@@ -105,7 +113,7 @@ try
 
     # The band reads this whoever ends up drawing the tip, a dry run included: the point of
     # the dry run is to exercise what the surfaces will show.
-    Write-PendingTip -StateDir $stateDir -Tip $tip -InstallState $installState
+    Write-PendingTip -StateDir $stateDir -SessionId (Get-SessionId $payload) -Tip $tip -InstallState $installState
 
     # `delivery` says who shows it. `band` leaves it to the mod, which is the only surface
     # that reaches the desktop at all; `hook` is the original path and the way back. The

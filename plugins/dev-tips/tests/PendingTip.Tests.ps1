@@ -4,17 +4,47 @@ BeforeAll {
     . (Join-Path $PSScriptRoot '../hooks/Write-PendingTip.ps1')
 }
 
+Describe 'Get-SharedDir' {
+    It 'is a fixed path, not one derived from the marketplace' {
+        $dir = Get-SharedDir
+
+        $dir | Should -Match 'dev-tips-shared$' -Because 'the module cannot know which marketplace installed us'
+        Test-Path -LiteralPath $dir | Should -BeTrue
+    }
+}
+
 Describe 'Write-PendingTip' {
-    It 'writes the fields the band draws, and nothing it cannot use' {
+    It 'writes one file per session, named so two sessions cannot overwrite each other' {
+        $shared = New-TempDir
         $stateDir = New-TempDir
-        $tip = [pscustomobject]@{
-            id = 'az-pr'; kind = 'skill'; title = '/kros-shared:az-pr'
-            body = 'Creates a pull request.'; ref = '/kros-shared:az-pr'; source = 'discovered'
-        }
 
-        Write-PendingTip -StateDir $stateDir -Tip $tip -InstallState 'installed'
+        Write-PendingTip -SharedDir $shared -StateDir $stateDir -SessionId 'abc-123' -InstallState 'installed' `
+            -Tip ([pscustomobject]@{ id = 'az-pr'; kind = 'skill'; title = 't'; body = 'b'; ref = '/az-pr'; source = 'discovered' })
 
-        $pending = Get-Content -LiteralPath (Join-Path $stateDir 'pending.json') -Raw | ConvertFrom-Json
+        Test-Path -LiteralPath (Join-Path $shared 'pending-abc-123.json') | Should -BeTrue
+    }
+
+    It 'carries the state directory, which is the only way the module can write back' {
+        $shared = New-TempDir
+        $stateDir = New-TempDir
+
+        Write-PendingTip -SharedDir $shared -StateDir $stateDir -SessionId 's1' -InstallState 'n/a' `
+            -Tip ([pscustomobject]@{ id = 'x'; title = 't'; body = 'b' })
+
+        $pending = Get-Content -LiteralPath (Join-Path $shared 'pending-s1.json') -Raw | ConvertFrom-Json
+        $pending.stateDir | Should -Be $stateDir
+    }
+
+    It 'writes the fields the band draws' {
+        $shared = New-TempDir
+
+        Write-PendingTip -SharedDir $shared -StateDir (New-TempDir) -SessionId 's1' -InstallState 'installed' `
+            -Tip ([pscustomobject]@{
+                id = 'az-pr'; kind = 'skill'; title = '/kros-shared:az-pr'
+                body = 'Creates a pull request.'; ref = '/kros-shared:az-pr'; source = 'discovered'
+            })
+
+        $pending = Get-Content -LiteralPath (Join-Path $shared 'pending-s1.json') -Raw | ConvertFrom-Json
         $pending.id | Should -Be 'az-pr'
         $pending.ref | Should -Be '/kros-shared:az-pr'
         $pending.installState | Should -Be 'installed'
@@ -24,38 +54,37 @@ Describe 'Write-PendingTip' {
     }
 
     It 'carries a url when the tip has one' {
-        $stateDir = New-TempDir
-        $tip = [pscustomobject]@{
-            id = 'pre-pr'; kind = 'rule'; title = 'T'; body = 'b'
-            ref = 'docs/guidelines/pre-pr-verification.md'
-            url = 'https://dev.azure.com/krossk/Esw/_git/Invoicing?path=/docs/guidelines/pre-pr-verification.md'
-            source = 'repo'
-        }
+        $shared = New-TempDir
 
-        Write-PendingTip -StateDir $stateDir -Tip $tip -InstallState 'n/a'
+        Write-PendingTip -SharedDir $shared -StateDir (New-TempDir) -SessionId 's1' -InstallState 'n/a' `
+            -Tip ([pscustomobject]@{
+                id = 'pre-pr'; kind = 'rule'; title = 'T'; body = 'b'
+                ref = 'docs/guidelines/pre-pr-verification.md'
+                url = 'https://dev.azure.com/krossk/Esw/_git/Invoicing?path=/docs/guidelines/pre-pr-verification.md'
+            })
 
-        $pending = Get-Content -LiteralPath (Join-Path $stateDir 'pending.json') -Raw | ConvertFrom-Json
+        $pending = Get-Content -LiteralPath (Join-Path $shared 'pending-s1.json') -Raw | ConvertFrom-Json
         $pending.url | Should -Match '^https://'
         $pending.kind | Should -Be 'rule'
     }
 
     It 'defaults the fields an older tip may not carry' {
-        $stateDir = New-TempDir
+        $shared = New-TempDir
 
-        Write-PendingTip -StateDir $stateDir -InstallState 'n/a' `
+        Write-PendingTip -SharedDir $shared -StateDir (New-TempDir) -SessionId 's1' -InstallState 'n/a' `
             -Tip ([pscustomobject]@{ id = 'x'; title = 't'; body = 'b' })
 
-        $pending = Get-Content -LiteralPath (Join-Path $stateDir 'pending.json') -Raw | ConvertFrom-Json
+        $pending = Get-Content -LiteralPath (Join-Path $shared 'pending-s1.json') -Raw | ConvertFrom-Json
         $pending.kind | Should -Be 'tip'
         $pending.source | Should -Be 'packaged'
     }
 
     It 'leaves no temp file behind' {
-        $stateDir = New-TempDir
+        $shared = New-TempDir
 
-        Write-PendingTip -StateDir $stateDir -InstallState 'n/a' `
+        Write-PendingTip -SharedDir $shared -StateDir (New-TempDir) -SessionId 's1' -InstallState 'n/a' `
             -Tip ([pscustomobject]@{ id = 'x'; title = 't'; body = 'b' })
 
-        @(Get-ChildItem -LiteralPath $stateDir -Filter '*.tmp').Count | Should -Be 0
+        @(Get-ChildItem -LiteralPath $shared -Filter '*.tmp').Count | Should -Be 0
     }
 }

@@ -1,10 +1,33 @@
 #!/usr/bin/env pwsh
-# The selected tip as data for the band to draw. The band renders and takes the answer;
+# The selected tip, handed to whatever draws it. The band renders and takes the answer;
 # it never decides which tip that is. Cooldown, maxShows, suppression and source ranking
-# stay here, in one place, whichever surface ends up showing the result.
+# stay in Show-DevTip.ps1, in one place, whichever surface shows the result.
+#
+# Why a fixed directory rather than $CLAUDE_PLUGIN_DATA: a hooks module never receives
+# that variable - the engine sets it for hook processes, and a module runs inside the
+# engine. Verified with a probe rather than assumed. `$.plugin` carries `name` and `root`
+# and no data directory, and the real one is named after the marketplace that installed
+# us, which the module has no way to learn. So the handshake lives at a path both sides
+# can spell, and it carries `stateDir` so the module can write answers back to the right
+# place.
+#
+# One file per session, because two sessions starting together would otherwise each draw
+# the tip the other was given. Both sides know the id: the hook from its stdin payload,
+# the module from `classic.SessionStart`, whose `e` is that same payload.
 
-function Write-PendingTip([string]$StateDir, $Tip, [string]$InstallState)
+function Get-SharedDir
 {
+    $userHome = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
+    $dir = Join-Path $userHome '.claude/plugins/data/dev-tips-shared'
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    return $dir
+}
+
+function Write-PendingTip([string]$SharedDir, [string]$StateDir, [string]$SessionId, $Tip, [string]$InstallState)
+{
+    if ([string]::IsNullOrWhiteSpace($SharedDir)) { $SharedDir = Get-SharedDir }
+    if ([string]::IsNullOrWhiteSpace($SessionId)) { $SessionId = 'unknown' }
+
     $pending = [pscustomobject]@{
         id           = $Tip.id
         kind         = if ($Tip.kind) { $Tip.kind } else { 'tip' }
@@ -14,11 +37,13 @@ function Write-PendingTip([string]$StateDir, $Tip, [string]$InstallState)
         url          = $Tip.url
         source       = if ($Tip.source) { $Tip.source } else { 'packaged' }
         installState = $InstallState
+        stateDir     = $StateDir
+        sessionId    = $SessionId
         pickedAt     = (Get-Date).ToUniversalTime().ToString('o')
     }
 
     # Temp plus move: the band may be reading this while SessionStart is still writing it.
-    $final = Join-Path $StateDir 'pending.json'
+    $final = Join-Path $SharedDir ("pending-$SessionId.json")
     $temp = "$final.$PID.tmp"
     $pending | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $temp -Encoding UTF8
     Move-Item -LiteralPath $temp -Destination $final -Force
