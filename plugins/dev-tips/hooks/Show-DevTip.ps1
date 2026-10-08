@@ -12,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'DevTips.Common.ps1')
 . (Join-Path $PSScriptRoot 'DevTips.Catalog.ps1')
+. (Join-Path $PSScriptRoot 'Write-PendingTip.ps1')
 
 try
 {
@@ -102,6 +103,16 @@ try
     $userMessage = (New-TipText $tip $installState) + "`n`n" + (New-Question $tip $installState)
     $actionHint = New-ActionHint $tip $installState
 
+    # The band reads this whoever ends up drawing the tip, a dry run included: the point of
+    # the dry run is to exercise what the surfaces will show.
+    Write-PendingTip -StateDir $stateDir -Tip $tip -InstallState $installState
+
+    # `delivery` says who shows it. `band` leaves it to the mod, which is the only surface
+    # that reaches the desktop at all; `hook` is the original path and the way back. The
+    # state write below still runs: a tip handed to the band counts as shown, or it would
+    # be offered again tomorrow.
+    $delivery = if ($config.delivery) { [string]$config.delivery } else { 'hook' }
+
     if ($DryRun)
     {
         Write-Host "repo=$repoName  picked=$($tip.id)  install=$installState  stateDir=$stateDir"
@@ -111,7 +122,14 @@ try
         exit 0
     }
 
-    Write-HookOutput 'SessionStart' $userMessage 'Tip pre používateľa.' $actionHint
+    if ($delivery -eq 'band')
+    {
+        Write-Log ("exit: band renders it | picked={0}" -f $tip.id)
+    }
+    else
+    {
+        Write-HookOutput 'SessionStart' $userMessage 'Tip pre používateľa.' $actionHint
+    }
 
     $nowIso = $today.ToString('o')
 
@@ -131,8 +149,10 @@ try
         entries         = [pscustomobject]$entries
     })
 
-    $channel = if (Test-IsDesktop) { 'additionalContext (desktop)' } else { 'systemMessage + additionalContext (cli)' }
-    Write-Log ("emitted {0} | shownNow={1} | state written" -f $channel, ($pick.Count + 1))
+    $channel = if ($delivery -eq 'band') { 'band' }
+               elseif (Test-IsDesktop) { 'additionalContext (desktop)' }
+               else { 'systemMessage + additionalContext (cli)' }
+    Write-Log ("delivered via {0} | shownNow={1} | state written" -f $channel, ($pick.Count + 1))
 }
 catch
 {

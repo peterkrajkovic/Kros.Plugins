@@ -1,4 +1,5 @@
 {
   "cooldownDays": 2,
-  "candidateCooldownHours": 12
+  "candidateCooldownHours": 12,
+  "delivery": "band"
 }
